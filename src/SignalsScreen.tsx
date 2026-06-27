@@ -53,15 +53,25 @@ const SignalsScreen: React.FC = () => {
       return;
     }
 
-    // 2. Save new trends to repository
-    saveTrends(candidateTrends);
-
-    // 3. Generate and save evidence links for the new trends
+    // 2. Generate evidence links for the new trends
     const evidenceLinks = generateEvidenceLinks(candidateTrends, signals, documents, sources);
+
+    // 3. Filter out trends that have zero evidence (e.g., built entirely from non-approved sources)
+    const validTrends = candidateTrends.filter(t => 
+      evidenceLinks.some(e => e.trendId === t.id)
+    );
+
+    if (validTrends.length === 0) {
+      setFeedbackMsg('No candidate trends could be generated (insufficient approved evidence).');
+      return;
+    }
+
+    // 4. Save valid trends and their evidence to the repository
+    saveTrends(validTrends);
     evidenceLinks.forEach(link => addEvidence(link));
 
-    // 4. Show visual feedback
-    setFeedbackMsg(`Successfully generated ${candidateTrends.length} candidate trend(s) and mapped ${evidenceLinks.length} evidence quotes. Ready for review on the Trends board.`);
+    // 5. Show visual feedback
+    setFeedbackMsg(`Successfully generated ${validTrends.length} candidate trend(s) and mapped ${evidenceLinks.length} evidence quotes. Ready for review on the Trends board.`);
     
     // Clear message after 5 seconds
     setTimeout(() => setFeedbackMsg(''), 5000);

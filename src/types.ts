@@ -83,6 +83,8 @@ export interface EvidenceLink {
 
 // Insight summary type
 export interface InsightSummary {
+  id: string;
+  industryProfileId: string;
   generatedAt: string; // ISO timestamp
   keyTrends: Trend[];
   watchItems: Trend[];

@@ -266,7 +266,12 @@ export function getSignals(): Signal[] {
 }
 
 export function saveSignals(newSignals: Signal[]): void {
-  globalThis.__mockRepoState!.signals = [...globalThis.__mockRepoState!.signals, ...newSignals];
+  const current = globalThis.__mockRepoState!.signals;
+  for (const s of newSignals) {
+    const idx = current.findIndex(existing => existing.id === s.id);
+    if (idx !== -1) current[idx] = s;
+    else current.push(s);
+  }
 }
 
 // ----- Trends -----
@@ -279,7 +284,19 @@ export function getTrendById(id: string): Trend | null {
 }
 
 export function saveTrends(newTrends: Trend[]): void {
-  globalThis.__mockRepoState!.trends = [...globalThis.__mockRepoState!.trends, ...newTrends];
+  const current = globalThis.__mockRepoState!.trends;
+  for (const t of newTrends) {
+    const idx = current.findIndex(existing => existing.id === t.id);
+    if (idx !== -1) {
+      // Preserve existing human-reviewed state (name, summary, status, etc)
+      // Only merge in new related signal IDs to maintain traceability
+      const existing = current[idx];
+      const mergedSignalIds = Array.from(new Set([...existing.relatedSignalIds, ...t.relatedSignalIds]));
+      current[idx] = { ...existing, relatedSignalIds: mergedSignalIds };
+    } else {
+      current.push(t);
+    }
+  }
 }
 
 export function updateTrendStatus(trendId: string, status: TrendStatus): void {
@@ -302,7 +319,11 @@ export function getEvidenceForTrend(trendId: string): EvidenceLink[] {
 }
 
 export function addEvidence(e: EvidenceLink): void {
-  globalThis.__mockRepoState!.evidences.push(e);
+  const current = globalThis.__mockRepoState!.evidences;
+  const exists = current.some(existing => existing.id === e.id);
+  if (!exists) {
+    current.push(e);
+  }
 }
 
 export type { SourceStatus, TrendStatus };

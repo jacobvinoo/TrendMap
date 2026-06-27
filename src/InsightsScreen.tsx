@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTrends } from './mockRepository';
+import { getTrends, getIndustryProfile } from './mockRepository';
 import { generateInsightSummary } from './insightSummary';
 import type { InsightSummary } from './types';
 
@@ -13,7 +13,8 @@ const InsightsScreen: React.FC = () => {
   useEffect(() => {
     const allTrends = getTrends();
     const approved = allTrends.filter((t) => t.status === 'approved');
-    const s = generateInsightSummary(approved);
+    const profile = getIndustryProfile();
+    const s = generateInsightSummary(approved, profile?.id || 'unknown-industry');
     setSummary(s);
   }, []);
 

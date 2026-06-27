@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import type { Trend, EvidenceLink } from './types';
 
+interface EvidenceWithTraceability extends EvidenceLink {
+  sourceName?: string;
+  documentTitle?: string;
+  documentDate?: string;
+}
+
 /**
  * TrendReviewBoard – displays candidate trends and allows approve/reject/edit actions.
  * Provides an executive-level detailed review panel with evidence and strategic analysis.
@@ -9,7 +15,7 @@ const TrendReviewBoard: React.FC = () => {
   const [trends, setTrends] = useState<Trend[]>([]);
   const [selected, setSelected] = useState<Trend | null>(null);
   const [evidenceMap, setEvidenceMap] = useState<Record<string, number>>({});
-  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceLink[]>([]);
+  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceWithTraceability[]>([]);
   
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -44,9 +50,24 @@ const TrendReviewBoard: React.FC = () => {
   };
 
   const handleSelect = async (trend: Trend) => {
-    const { getEvidenceForTrend } = await import('./mockRepository');
+    const { getEvidenceForTrend, getDocuments, getSources } = await import('./mockRepository');
+    const docs = getDocuments();
+    const sources = getSources();
+
     setSelected(trend);
-    setSelectedEvidence(getEvidenceForTrend(trend.id));
+
+    const evLinks = getEvidenceForTrend(trend.id).map(ev => {
+      const doc = docs.find(d => d.id === ev.documentId);
+      const source = sources.find(s => s.id === ev.sourceId);
+      return {
+        ...ev,
+        sourceName: source?.name,
+        documentTitle: doc?.title,
+        documentDate: doc?.publishedDate,
+      };
+    });
+
+    setSelectedEvidence(evLinks);
     setEditName(trend.name);
     setIsEditing(false);
   };
@@ -149,6 +170,10 @@ const TrendReviewBoard: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {selectedEvidence.map(ev => (
                     <div key={ev.id} style={{ borderLeft: '3px solid #5a5aff', paddingLeft: '1rem' }}>
+                      <div style={{ marginBottom: '0.5rem', fontSize: '0.8rem', color: '#888' }}>
+                        <span style={{ color: '#a0a0ff' }}>Source:</span> {ev.sourceName || ev.sourceId} &nbsp;|&nbsp; 
+                        <span style={{ color: '#a0a0ff' }}> Document:</span> {ev.documentTitle || ev.documentId} ({ev.documentDate})
+                      </div>
                       <blockquote style={{ margin: 0, fontStyle: 'italic', color: '#ddd', fontSize: '0.95rem' }}>
                         "{ev.quote}"
                       </blockquote>

@@ -8,11 +8,14 @@ import type { Trend, InsightSummary } from './types';
  * - emergingRisks: trends that have any blockers.
  * - opportunities: trends that have any recommendedActions.
  */
-export function generateInsightSummary(allTrends: Trend[]): InsightSummary {
+export function generateInsightSummary(allTrends: Trend[], industryProfileId: string = 'default'): InsightSummary {
   const now = new Date().toISOString();
-
   // Filter only approved trends (exclude rejected and candidate)
   const approvedTrends = allTrends.filter((t) => t.status === 'approved');
+
+  // Create a deterministic ID based on the approved trends
+  const trendIds = approvedTrends.map(t => t.id).sort().join('-');
+  const summaryId = `summary-${industryProfileId}-${trendIds || 'empty'}`;
 
   // Ensure deterministic ordering by sorting by impactScore desc then name
   const sortedByImpact = [...approvedTrends].sort((a, b) => {
@@ -33,6 +36,8 @@ export function generateInsightSummary(allTrends: Trend[]): InsightSummary {
   );
 
   return {
+    id: summaryId,
+    industryProfileId,
     generatedAt: now,
     keyTrends,
     watchItems,
