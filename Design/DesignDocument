@@ -1,0 +1,952 @@
+You are building Phase 1 of TrendMap: an agent-based trend spotting and analysis system.
+
+STRICT RULE:
+Use Test-Driven Development only.
+Do not implement any feature before writing failing tests.
+For every step:
+1. Write tests first.
+2. Run tests and confirm they fail for the right reason.
+3. Implement the smallest amount of code.
+4. Run tests and confirm they pass.
+5. Refactor only if tests remain green.
+6. Provide a short verification summary before moving to the next step.
+
+Do not skip tests. Do not combine multiple steps without verification.
+
+====================================================
+PRODUCT GOAL
+====================================================
+
+Build Phase 1 MVP: Manual-Assisted Trend Intelligence.
+
+The system allows a user to:
+- Define an industry to monitor.
+- Add or review suggested sources.
+- Ingest mock/source documents.
+- Extract structured signals.
+- Cluster signals into candidate trends.
+- Review, approve, reject, or edit trends.
+- View evidence-backed trend cards.
+- See source traceability for every generated trend.
+
+This is NOT a generic news summariser.
+The core chain is:
+
+Sources → Documents → Signals → Trends → Evidence → Human Review
+
+====================================================
+TECH STACK ASSUMPTION
+====================================================
+
+Use the existing project stack if already present.
+
+If starting fresh, use:
+- Frontend: React + TypeScript + Vite
+- Styling: Tailwind CSS
+- Testing: Vitest + React Testing Library
+- E2E Testing: Playwright
+- Mock API/data layer: local TypeScript services first
+- State: simple React state or Zustand
+- Persistence for Phase 1: local JSON/mock repository layer
+
+Do not introduce a backend unless the existing app already has one.
+
+====================================================
+PHASE 1 SCOPE
+====================================================
+
+Build these modules:
+
+1. Industry Setup
+2. Source Library
+3. Document Intake
+4. Signal Extraction
+5. Trend Clustering
+6. Trend Review Board
+7. Trend Detail Page
+8. Evidence Traceability
+9. Basic Insight Summary
+
+Out of scope for Phase 1:
+- Continuous monitoring scheduler
+- Real web crawling
+- Real LLM API calls
+- User authentication
+- Production vector database
+- Knowledge graph database
+- Multi-user collaboration
+- Automated alerts
+
+Use deterministic mock logic so tests are stable.
+
+====================================================
+DATA MODEL
+====================================================
+
+Create TypeScript types for:
+
+IndustryProfile:
+- id
+- name
+- geography
+- description
+- strategicPriorities[]
+- customerSegments[]
+- competitors[]
+- timeHorizons[]
+
+Source:
+- id
+- name
+- url
+- sourceType
+- credibilityScore
+- relevanceScore
+- freshnessScore
+- status: suggested | approved | rejected
+- notes
+
+Document:
+- id
+- sourceId
+- title
+- publishedDate
+- content
+- url
+- ingestionStatus
+- extractedSignalIds[]
+
+Signal:
+- id
+- documentId
+- sourceId
+- title
+- summary
+- signalType
+- pestleCategory
+- noveltyScore
+- strengthScore
+- confidenceScore
+- evidenceDate
+- tags[]
+
+Trend:
+- id
+- name
+- summary
+- status: candidate | approved | rejected | needs_review
+- horizon
+- likelihoodScore
+- confidenceScore
+- impactScore
+- maturityStage
+- relatedSignalIds[]
+- drivers[]
+- blockers[]
+- whatNeedsToBeTrue[]
+- leadingIndicators[]
+- monitoringQuestions[]
+- recommendedActions[]
+- createdAt
+- updatedAt
+
+EvidenceLink:
+- id
+- trendId
+- signalId
+- documentId
+- sourceId
+- quote
+- relevanceReason
+
+InsightSummary:
+- id
+- industryProfileId
+- generatedAt
+- keyTrends[]
+- emergingRisks[]
+- opportunities[]
+- watchItems[]
+
+====================================================
+MOCK DATA
+====================================================
+
+Use mock data for an example industry:
+
+Industry:
+Online Grocery / Retail Search
+
+Mock sources:
+1. Retail technology news source
+2. Grocery industry publication
+3. Competitor product blog
+4. Retail media analyst report
+5. AI search vendor blog
+6. Consumer behaviour research source
+
+Mock documents should include signals around:
+- AI-assisted grocery search
+- Conversational commerce
+- Retail media sponsored placements
+- Zero-result search reduction
+- Personalised recommendations
+- Recipe-to-cart experiences
+- Trust and transparency in AI recommendations
+
+====================================================
+UI DESIGN REQUIREMENTS
+====================================================
+
+Create a clean executive-friendly interface.
+
+Main navigation:
+- Setup
+- Sources
+- Signals
+- Trends
+- Insights
+
+Use a two-column layout where useful:
+- Left: list/cards
+- Right: selected item detail
+
+Visual style:
+- Minimal
+- Enterprise SaaS feel
+- Clear labels
+- No excessive gradients
+- Good empty states
+- Clear traceability links
+
+Important UX principles:
+- Every trend must show “Why this trend exists”
+- Every trend must show evidence sources
+- Users must be able to approve/reject/edit candidate trends
+- Users must see confidence and likelihood separately
+- Users must see timing horizon clearly
+- Users must see “What needs to be true”
+- Users must see “What to monitor next”
+
+====================================================
+TESTING REQUIREMENTS
+====================================================
+
+Use these test layers:
+
+1. Unit tests
+- Type guards
+- Scoring functions
+- Signal extraction mock logic
+- Trend clustering mock logic
+- Evidence linking
+- Trend status updates
+
+2. Component tests
+- Industry setup form
+- Source card
+- Signal card
+- Trend card
+- Trend detail panel
+- Review actions
+- Evidence list
+
+3. Integration tests
+- Create industry profile → approve sources → ingest documents → extract signals → generate trends
+- Approve trend and verify status changes
+- Reject trend and verify it disappears from approved insight summary
+- Click evidence link and verify source/document detail appears
+
+4. E2E tests
+- Full happy path
+- Empty state path
+- Rejection path
+- Edit trend path
+- Evidence traceability path
+
+Every feature must have tests before implementation.
+
+====================================================
+STEP-BY-STEP IMPLEMENTATION
+====================================================
+
+----------------------------------------------------
+STEP 1: Project health check
+----------------------------------------------------
+
+Before coding:
+- Inspect project structure.
+- Identify framework, package manager, test setup.
+- Do not change architecture unnecessarily.
+- If tests do not exist, install/configure Vitest and React Testing Library.
+- If E2E does not exist, install/configure Playwright.
+
+Tests first:
+- Add a simple smoke test confirming the app renders.
+- Add a test confirming the main navigation labels are expected.
+
+Expected tests:
+- App renders without crashing.
+- Navigation contains Setup, Sources, Signals, Trends, Insights.
+
+Run tests.
+Confirm failures if components do not exist.
+Then implement minimum navigation shell.
+
+Verification:
+- Unit/component tests pass.
+- App opens locally.
+- Navigation visible.
+
+----------------------------------------------------
+STEP 2: Define domain types and validation
+----------------------------------------------------
+
+Write tests first for:
+- IndustryProfile validation
+- Source validation
+- Document validation
+- Signal validation
+- Trend validation
+- EvidenceLink validation
+
+Create type guards or validation functions:
+- isValidIndustryProfile
+- isValidSource
+- isValidDocument
+- isValidSignal
+- isValidTrend
+- isValidEvidenceLink
+
+Test cases:
+- Valid object returns true.
+- Missing required field returns false.
+- Invalid score outside 0–1 returns false.
+- Invalid trend status returns false.
+- Invalid date returns false.
+- Empty evidence quote returns false.
+
+Then implement types and validators.
+
+Verification:
+- All validation tests pass.
+- Invalid objects are rejected.
+- No TypeScript errors.
+
+----------------------------------------------------
+STEP 3: Create mock repository layer
+----------------------------------------------------
+
+Write tests first for a local repository service.
+
+Required functions:
+- getIndustryProfile()
+- saveIndustryProfile(profile)
+- getSources()
+- updateSourceStatus(sourceId, status)
+- getDocuments()
+- getSignals()
+- saveSignals(signals)
+- getTrends()
+- saveTrends(trends)
+- updateTrendStatus(trendId, status)
+- updateTrend(trendId, patch)
+- getEvidenceForTrend(trendId)
+
+Test cases:
+- Returns seeded mock data.
+- Saves updated industry profile.
+- Approves a source.
+- Rejects a source.
+- Saves extracted signals.
+- Saves candidate trends.
+- Updates trend status.
+- Patches trend fields.
+- Returns evidence links for a trend.
+
+Then implement with in-memory/local mock data.
+
+Verification:
+- Repository tests pass.
+- Repository functions are deterministic.
+- No external APIs are called.
+
+----------------------------------------------------
+STEP 4: Industry Setup screen
+----------------------------------------------------
+
+Write component tests first.
+
+UI fields:
+- Industry name
+- Geography
+- Description
+- Strategic priorities
+- Customer segments
+- Competitors
+- Time horizons
+
+Test cases:
+- Renders all fields.
+- Shows default mock Online Grocery profile.
+- User can edit industry name.
+- User can add strategic priority.
+- User can add competitor.
+- Save button persists profile.
+- Empty industry name shows validation error.
+
+Then implement UI.
+
+Acceptance criteria:
+- Setup screen is usable.
+- Saved profile is reflected in page header or summary.
+- Empty state/error state is clear.
+
+Verification:
+- Component tests pass.
+- Manual test: edit and save profile.
+- No console errors.
+
+----------------------------------------------------
+STEP 5: Source Library screen
+----------------------------------------------------
+
+Write tests first.
+
+UI requirements:
+- Show source cards.
+- Each source shows:
+  - name
+  - source type
+  - credibility score
+  - relevance score
+  - freshness score
+  - status
+- Actions:
+  - approve
+  - reject
+  - add note
+
+Test cases:
+- Renders all mock sources.
+- Approved source changes status to approved.
+- Rejected source changes status to rejected.
+- Scores are displayed as percentages.
+- Notes can be added.
+- Rejected sources are visually distinct.
+
+Then implement.
+
+Acceptance criteria:
+- User can review source quality.
+- Source status is persisted.
+- Source status affects later document intake.
+
+Verification:
+- Tests pass.
+- Approve/reject source manually.
+- Check state updates correctly.
+
+----------------------------------------------------
+STEP 6: Document Intake screen
+----------------------------------------------------
+
+Write tests first.
+
+UI requirements:
+- Show documents grouped by source.
+- Show only approved-source documents by default.
+- Toggle to show all documents.
+- Each document shows:
+  - title
+  - source
+  - published date
+  - ingestion status
+  - short excerpt
+- Action:
+  - “Extract signals”
+
+Test cases:
+- Approved source documents are shown.
+- Rejected source documents hidden by default.
+- Toggle shows all documents.
+- Clicking Extract signals updates ingestion status.
+- Document card displays title, date, source name.
+
+Then implement.
+
+Acceptance criteria:
+- Document intake is clear.
+- User understands what will be analysed.
+- Rejected source content is not used by default.
+
+Verification:
+- Tests pass.
+- Manual click extract signals.
+- Status changes from pending to processed.
+
+----------------------------------------------------
+STEP 7: Deterministic Signal Extraction service
+----------------------------------------------------
+
+Write unit tests first.
+
+Create extractSignalsFromDocument(document): Signal[]
+
+This must be deterministic.
+Do not call an LLM.
+
+Use keyword/pattern matching for mock phase.
+
+Example mapping:
+- “AI assistant”, “conversational”, “chat” → AI-assisted shopping signal
+- “sponsored”, “retail media”, “ad placement” → Retail media influence signal
+- “zero result”, “no results”, “relevance” → Search relevance signal
+- “recipe”, “meal planning”, “basket” → Recipe-to-cart signal
+- “transparency”, “trust”, “explainability” → Trust in AI recommendations signal
+
+Test cases:
+- AI assistant document creates AI-assisted shopping signal.
+- Sponsored placement document creates retail media signal.
+- Zero result document creates search relevance signal.
+- Recipe document creates recipe-to-cart signal.
+- Trust document creates transparency signal.
+- Irrelevant document creates no signal.
+- Signal includes documentId, sourceId and evidenceDate.
+- Scores are between 0 and 1.
+- PESTLE category is populated.
+- Signal type is populated.
+
+Then implement service.
+
+Verification:
+- Unit tests pass.
+- Extraction is stable.
+- No random scoring.
+
+----------------------------------------------------
+STEP 8: Signals screen
+----------------------------------------------------
+
+Write component/integration tests first.
+
+UI requirements:
+- Show extracted signals.
+- Filter by:
+  - PESTLE category
+  - signal type
+  - confidence
+  - source
+- Each signal card shows:
+  - title
+  - summary
+  - novelty
+  - strength
+  - confidence
+  - evidence date
+  - source
+
+Test cases:
+- Signals render after extraction.
+- Filter by PESTLE works.
+- Filter by confidence works.
+- Clicking signal opens detail panel.
+- Detail panel shows source and document reference.
+- Empty state appears before extraction.
+
+Then implement.
+
+Acceptance criteria:
+- User can inspect raw signals before they become trends.
+- Traceability is visible at signal level.
+
+Verification:
+- Tests pass.
+- Manual filtering works.
+- Signal detail opens correctly.
+
+----------------------------------------------------
+STEP 9: Trend Clustering service
+----------------------------------------------------
+
+Write unit tests first.
+
+Create clusterSignalsIntoTrends(signals): Trend[]
+
+Rules:
+- Signals with AI assistant/conversational/search/recommendation tags cluster into:
+  “AI-assisted grocery discovery”
+- Signals with sponsored/retail media/ad placement tags cluster into:
+  “Retail media influence on search outcomes”
+- Signals with recipe/meal planning/basket tags cluster into:
+  “Recipe-to-cart shopping journeys”
+- Signals with transparency/trust/explainability tags cluster into:
+  “Trust and transparency in AI recommendations”
+
+Trend scoring:
+- likelihoodScore = average signal strengthScore adjusted by number of sources
+- confidenceScore = average signal confidenceScore
+- impactScore = deterministic mapping by trend type
+- horizon:
+  - high signal count + high strength → 6–12 months
+  - medium evidence → 12–24 months
+  - weak evidence → 2–3 years
+
+Test cases:
+- Related signals cluster into correct trend.
+- Unrelated signals do not cluster.
+- Trend has relatedSignalIds.
+- Trend includes whatNeedsToBeTrue.
+- Trend includes leadingIndicators.
+- Trend includes monitoringQuestions.
+- Scores are between 0 and 1.
+- Horizon is populated.
+- Maturity stage is populated.
+- Duplicate signals do not create duplicate trends.
+
+Then implement.
+
+Verification:
+- Unit tests pass.
+- Trend generation deterministic.
+- Every trend links back to signals.
+
+----------------------------------------------------
+STEP 10: Evidence linking service
+----------------------------------------------------
+
+Write tests first.
+
+Create generateEvidenceLinks(trends, signals, documents, sources): EvidenceLink[]
+
+Test cases:
+- Each trend has at least one evidence link.
+- Evidence link references valid trendId, signalId, documentId and sourceId.
+- Evidence quote is extracted from document content.
+- Evidence relevanceReason explains why the signal supports the trend.
+- Invalid references are not created.
+- Rejected source evidence is excluded unless explicitly allowed.
+
+Then implement.
+
+Verification:
+- Tests pass.
+- Every visible trend has evidence.
+- Clicking evidence can trace back to source and document.
+
+----------------------------------------------------
+STEP 11: Trend Review Board
+----------------------------------------------------
+
+Write component/integration tests first.
+
+UI requirements:
+- Show candidate trend cards.
+- Each card shows:
+  - trend name
+  - summary
+  - likelihood
+  - confidence
+  - impact
+  - horizon
+  - maturity stage
+  - evidence count
+- Actions:
+  - approve
+  - reject
+  - edit
+  - open detail
+
+Test cases:
+- Candidate trends render after clustering.
+- Approve changes status to approved.
+- Reject changes status to rejected.
+- Rejected trend is hidden from default candidate view.
+- Edit updates trend summary.
+- Scores render correctly.
+- Evidence count renders correctly.
+- Empty state appears before trends are generated.
+
+Then implement.
+
+Acceptance criteria:
+- Human review is central.
+- AI-generated trends are not automatically accepted.
+- User has control.
+
+Verification:
+- Tests pass.
+- Manual approval/rejection works.
+- Edited trend persists.
+
+----------------------------------------------------
+STEP 12: Trend Detail Page
+----------------------------------------------------
+
+Write tests first.
+
+UI sections:
+1. Overview
+2. Why this matters
+3. Evidence
+4. Related signals
+5. Drivers
+6. Blockers
+7. What needs to be true
+8. Leading indicators
+9. Monitoring questions
+10. Recommended actions
+
+Test cases:
+- Detail page renders selected trend.
+- Evidence section shows source and document.
+- Related signals are listed.
+- What needs to be true is visible.
+- Leading indicators are visible.
+- Monitoring questions are visible.
+- Recommended actions are visible.
+- Missing optional arrays show helpful empty state.
+- Back button returns to review board.
+
+Then implement.
+
+Acceptance criteria:
+- User can understand why the trend exists.
+- User can challenge the trend using evidence.
+- User can see what to monitor next.
+
+Verification:
+- Tests pass.
+- Manual review of a trend detail works.
+
+----------------------------------------------------
+STEP 13: Insight Summary screen
+----------------------------------------------------
+
+Write tests first.
+
+Create generateInsightSummary(approvedTrends): InsightSummary
+
+Rules:
+- Only approved trends appear.
+- Highest impact trends appear as key trends.
+- Trends with high impact but low confidence appear as watch items.
+- Trends with blockers appear as emerging risks.
+- Trends with recommended actions appear as opportunities.
+
+Test cases:
+- Rejected trends are excluded.
+- Candidate trends are excluded.
+- Approved trends are included.
+- Key trends sorted by impact.
+- Watch items include lower-confidence trends.
+- Emerging risks include blockers.
+- Opportunities include recommended actions.
+
+Then implement Insights screen.
+
+UI requirements:
+- Executive summary card
+- Key trends
+- Emerging risks
+- Opportunities
+- Watch items
+- “Last generated” timestamp
+- Link back to trend detail
+
+Verification:
+- Tests pass.
+- Summary changes when a trend is approved/rejected.
+- User can navigate from insight to trend.
+
+----------------------------------------------------
+STEP 14: End-to-end happy path
+----------------------------------------------------
+
+Write Playwright tests first.
+
+Scenario:
+1. User opens app.
+2. Goes to Setup.
+3. Edits industry profile.
+4. Goes to Sources.
+5. Approves at least 4 sources.
+6. Goes to Documents.
+7. Extracts signals.
+8. Goes to Signals.
+9. Confirms signals are visible.
+10. Generates trends.
+11. Goes to Trends.
+12. Approves one trend.
+13. Opens trend detail.
+14. Checks evidence.
+15. Goes to Insights.
+16. Confirms approved trend appears.
+
+Expected:
+- No console errors.
+- No broken navigation.
+- Evidence traceability works.
+
+Then fix app until E2E passes.
+
+----------------------------------------------------
+STEP 15: End-to-end rejection path
+----------------------------------------------------
+
+Write Playwright test first.
+
+Scenario:
+1. Generate candidate trends.
+2. Reject one trend.
+3. Confirm rejected trend is hidden from default view.
+4. Confirm rejected trend does not appear in Insights.
+5. Toggle rejected filter.
+6. Confirm rejected trend can still be inspected.
+
+Then implement missing pieces.
+
+Verification:
+- E2E passes.
+- Rejected trends remain auditable.
+
+----------------------------------------------------
+STEP 16: End-to-end edit path
+----------------------------------------------------
+
+Write Playwright test first.
+
+Scenario:
+1. Open candidate trend.
+2. Click edit.
+3. Change trend name and summary.
+4. Save.
+5. Confirm updated trend appears in board, detail and insights after approval.
+
+Verification:
+- E2E passes.
+- Edited fields persist.
+
+----------------------------------------------------
+STEP 17: Evidence traceability validation
+----------------------------------------------------
+
+Write integration tests first.
+
+For every trend:
+- relatedSignalIds must exist.
+- each signal must reference valid documentId.
+- each document must reference valid sourceId.
+- evidence links must not be orphaned.
+
+Test cases:
+- No orphan trend-signal links.
+- No orphan signal-document links.
+- No orphan document-source links.
+- No evidence from rejected source by default.
+- Every approved trend has at least one evidence item.
+
+Then implement any missing validation utility.
+
+Add a “Traceability Health” check in developer/debug mode or hidden test utility.
+
+Verification:
+- Tests pass.
+- Traceability chain is complete:
+  Trend → Signal → Document → Source
+
+----------------------------------------------------
+STEP 18: Accessibility and usability validation
+----------------------------------------------------
+
+Write tests/checks for:
+- Buttons have accessible names.
+- Forms have labels.
+- Cards are keyboard navigable.
+- Colour is not the only status indicator.
+- Score labels have text values.
+- Empty states are understandable.
+
+Use React Testing Library and Playwright accessibility checks where available.
+
+Manual validation:
+- Navigate main workflow using keyboard.
+- Confirm focus states are visible.
+- Confirm trend status is shown with text, not just colour.
+
+----------------------------------------------------
+STEP 19: Final quality gate
+----------------------------------------------------
+
+Before finishing, run:
+
+- TypeScript check
+- Unit tests
+- Component tests
+- Integration tests
+- Playwright E2E tests
+- Lint
+- Build
+
+Do not mark task complete unless all pass.
+
+Provide final report with:
+
+1. What was implemented
+2. Files changed
+3. Tests added
+4. Test results
+5. Known limitations
+6. How to run locally
+7. Suggested Phase 2 next steps
+
+====================================================
+ACCEPTANCE CRITERIA
+====================================================
+
+Phase 1 is complete only when:
+
+- User can define an industry profile.
+- User can approve/reject sources.
+- User can review source-linked documents.
+- User can extract deterministic mock signals.
+- User can cluster signals into candidate trends.
+- User can approve/reject/edit trends.
+- Approved trends appear in Insights.
+- Rejected trends do not appear in Insights.
+- Every trend has traceable evidence.
+- Every evidence item links back to source and document.
+- Tests are written before implementation.
+- All tests pass.
+- No external LLM/API dependency is required.
+
+====================================================
+DESIGN QUALITY BAR
+====================================================
+
+The product should feel like an early version of:
+- CB Insights-style market intelligence
+- Futures Platform-style foresight workspace
+- FIBRES-style weak signal review
+- Gartner-style maturity and horizon tracking
+
+But keep the MVP simple and buildable.
+
+The most important user promise:
+
+“I can see what trends are emerging, why the system thinks they matter, what evidence supports them, and what I should monitor next.”
+
+====================================================
+IMPORTANT IMPLEMENTATION NOTES
+====================================================
+
+Do not generate trends without evidence.
+Do not hide uncertainty.
+Do not combine likelihood and confidence.
+Do not treat all sources equally.
+Do not allow rejected sources to influence default insights.
+Do not auto-approve AI-generated trends.
+Do not create random or non-deterministic scores.
+Do not introduce real API calls in Phase 1.
+Do not skip E2E tests.
+Do not proceed to the next implementation step until the current tests pass.
