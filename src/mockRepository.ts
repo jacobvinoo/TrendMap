@@ -249,11 +249,191 @@ function seedData() {
     }
   ];
 
-  // Empty collections for dynamic data
-  state.signals = [];
-  state.trends = [];
+  // Seed signals — traceable back to seeded documents and sources
+  state.signals = [
+    {
+      id: 'sig-1', documentId: 'doc-1', sourceId: 'src-1',
+      title: 'Retailers deploying AI-powered grocery search',
+      summary: 'Multiple grocery retailers piloting natural language search to reduce zero-result rates.',
+      signalType: 'technology', pestleCategory: 'Technology',
+      polarity: 'positive', noveltyScore: 0.85, strengthScore: 0.8, confidenceScore: 0.82, momentumScore: 0.78,
+      evidenceDate: '2026-01-10', tags: ['AI', 'search', 'grocery', 'natural-language'],
+    },
+    {
+      id: 'sig-2', documentId: 'doc-2', sourceId: 'src-2',
+      title: 'Consumer adoption of AI grocery assistants accelerating',
+      summary: 'Survey shows 34% of online grocery shoppers have used an AI assistant for product discovery.',
+      signalType: 'consumer', pestleCategory: 'Social',
+      polarity: 'positive', noveltyScore: 0.78, strengthScore: 0.75, confidenceScore: 0.8, momentumScore: 0.82,
+      evidenceDate: '2026-01-12', tags: ['AI', 'consumer', 'adoption', 'grocery'],
+    },
+    {
+      id: 'sig-3', documentId: 'doc-3', sourceId: 'src-3',
+      title: 'Conversational shopping interfaces emerging in e-commerce',
+      summary: 'Chat-based shopping interfaces reducing basket abandonment in early pilots.',
+      signalType: 'technology', pestleCategory: 'Technology',
+      polarity: 'positive', noveltyScore: 0.72, strengthScore: 0.65, confidenceScore: 0.7, momentumScore: 0.6,
+      evidenceDate: '2026-01-14', tags: ['conversational', 'commerce', 'chat', 'search'],
+    },
+    {
+      id: 'sig-4', documentId: 'doc-4', sourceId: 'src-4',
+      title: 'Retail media ad revenue surpassing traditional digital in grocery',
+      summary: 'Retail media networks now account for 12% of total grocery digital ad spend — up 40% YoY.',
+      signalType: 'economic', pestleCategory: 'Economic',
+      polarity: 'positive', noveltyScore: 0.7, strengthScore: 0.85, confidenceScore: 0.88, momentumScore: 0.75,
+      evidenceDate: '2026-01-15', tags: ['retail-media', 'advertising', 'revenue', 'grocery'],
+    },
+    {
+      id: 'sig-5', documentId: 'doc-5', sourceId: 'src-4',
+      title: 'Sponsored placements degrading search relevance in some markets',
+      summary: 'Consumer trust declining when sponsored products dominate zero-click search results.',
+      signalType: 'risk', pestleCategory: 'Social',
+      polarity: 'negative', noveltyScore: 0.65, strengthScore: 0.7, confidenceScore: 0.72, momentumScore: 0.55,
+      evidenceDate: '2026-01-16', tags: ['retail-media', 'trust', 'relevance', 'sponsored'],
+    },
+    {
+      id: 'sig-6', documentId: 'doc-6', sourceId: 'src-5',
+      title: 'Hyper-personalisation driving 18% basket size uplift in pilots',
+      summary: 'AI-driven personalised recommendations producing measurable basket uplift in controlled trials.',
+      signalType: 'technology', pestleCategory: 'Technology',
+      polarity: 'positive', noveltyScore: 0.8, strengthScore: 0.75, confidenceScore: 0.76, momentumScore: 0.7,
+      evidenceDate: '2026-01-20', tags: ['personalisation', 'recommendations', 'basket', 'AI'],
+    },
+    {
+      id: 'sig-7', documentId: 'doc-7', sourceId: 'src-6',
+      title: 'Recipe-to-cart reducing planning friction for weekly shoppers',
+      summary: 'Recipe-driven shopping tools increasing average session value for engaged users.',
+      signalType: 'consumer', pestleCategory: 'Social',
+      polarity: 'positive', noveltyScore: 0.62, strengthScore: 0.6, confidenceScore: 0.65, momentumScore: 0.5,
+      evidenceDate: '2026-01-22', tags: ['recipe', 'cart', 'meal-planning', 'personalisation'],
+    },
+  ];
+
+  // Seed four approved trends — the canonical Online Grocery / Retail Search mock trends
+  // These are required for Phase 3 strategic analysis to work on fresh load.
+  state.trends = [
+    {
+      id: 'trend-ai-grocery-search',
+      name: 'AI-assisted grocery discovery',
+      status: 'approved',
+      summary: 'Retailers are deploying AI-powered natural language search to help shoppers discover products faster, reduce zero-result rates, and increase basket conversion. Consumer adoption is accelerating with 34%+ of online grocery users having tried an AI assistant.',
+      horizon: 'short',
+      likelihoodScore: 0.82,
+      confidenceScore: 0.85,
+      momentumScore: 0.80,
+      impactScore: 0.92,
+      maturityStage: 'emerging',
+      relatedSignalIds: ['sig-1', 'sig-2'],
+      drivers: ['Improving NLP model quality', 'Consumer comfort with AI tools', 'Competitive pressure from pure-play e-commerce'],
+      blockers: ['Data quality and catalogue coverage', 'Customer trust in AI recommendations', 'Integration complexity'],
+      whatNeedsToBeTrue: ['NLP accuracy >90% on grocery queries', 'Shopper willingness to use conversational interfaces', 'Internal data pipelines ready for real-time inference'],
+      leadingIndicators: ['Number of retailers publicly launching AI search', 'Zero-result rate trends in pilot markets', 'Consumer survey data on AI tool usage'],
+      monitoringQuestions: ['Which retailers have launched AI search in ANZ?', 'What is the reported impact on conversion?', 'How are customers responding to AI-generated results?'],
+      recommendedActions: ['Run a time-boxed AI search pilot on a single product category', 'Define success metrics before launch', 'Monitor competitor AI search feature announcements'],
+      createdAt: '2026-01-15',
+      updatedAt: '2026-01-20',
+    },
+    {
+      id: 'trend-retail-media-maturation',
+      name: 'Retail media influence on search outcomes',
+      status: 'approved',
+      summary: 'Retail media ad revenue in grocery is growing 40% YoY. Sponsored placements are increasingly influencing what appears in search results, creating tension between commercial objectives and shopper relevance. Trust risk is emerging as a counter-signal.',
+      horizon: 'short',
+      likelihoodScore: 0.85,
+      confidenceScore: 0.88,
+      momentumScore: 0.75,
+      impactScore: 0.78,
+      maturityStage: 'growth',
+      relatedSignalIds: ['sig-4', 'sig-5'],
+      drivers: ['Third-party cookie deprecation', 'First-party data value', 'Retailer diversification of revenue streams'],
+      blockers: ['Customer trust erosion if relevance degrades', 'Regulatory scrutiny on ad disclosure', 'Measurement complexity'],
+      whatNeedsToBeTrue: ['Sponsored placements can coexist with relevant organic results', 'Retailers can measure both ad revenue and shopper satisfaction', 'Transparency tools reduce customer concern'],
+      leadingIndicators: ['ANZ grocery retail media revenue growth', 'Consumer trust scores in AI-powered search', 'Regulatory announcements on algorithmic ad disclosure'],
+      monitoringQuestions: ['What percentage of search results are sponsored in key categories?', 'Is customer satisfaction correlated with sponsored placement density?', 'Are regulators signalling disclosure requirements?'],
+      recommendedActions: ['Audit current sponsored placement density vs relevance scores', 'Establish customer trust measurement baseline', 'Evaluate transparency labelling options'],
+      createdAt: '2026-01-15',
+      updatedAt: '2026-01-20',
+    },
+    {
+      id: 'trend-conversational-commerce',
+      name: 'Conversational commerce in grocery',
+      status: 'approved',
+      summary: 'Chat-based and voice-driven shopping interfaces are emerging as a complementary channel to keyword search. Early pilots show basket abandonment reduction and increased engagement for complex multi-item orders.',
+      horizon: 'medium',
+      likelihoodScore: 0.65,
+      confidenceScore: 0.70,
+      momentumScore: 0.60,
+      impactScore: 0.72,
+      maturityStage: 'emerging',
+      relatedSignalIds: ['sig-3'],
+      drivers: ['Consumer familiarity with chat interfaces (WhatsApp, Messenger)', 'Voice assistant penetration in home', 'Grocery complexity suits conversational UX'],
+      blockers: ['Voice accuracy for grocery SKUs is still limited', 'Platform fragmentation', 'Low consumer awareness of grocery voice commerce'],
+      whatNeedsToBeTrue: ['Voice recognition accuracy >95% on grocery product names', 'Shopper willingness to use voice for grocery', 'API integrations with major voice platforms available'],
+      leadingIndicators: ['Voice assistant grocery commerce announcements', 'Chat-based grocery pilot launch count', 'Consumer survey data on voice grocery interest'],
+      monitoringQuestions: ['Which platforms are launching grocery voice commerce in ANZ?', 'What is the task completion rate in chat-based grocery pilots?', 'Are younger shopper cohorts adopting conversational shopping?'],
+      recommendedActions: ['Monitor voice platform grocery API availability', 'Test a limited conversational ordering pilot via chat', 'Survey shopper interest in voice-based repeat ordering'],
+      createdAt: '2026-01-15',
+      updatedAt: '2026-01-20',
+    },
+    {
+      id: 'trend-personalised-recommendations',
+      name: 'AI-powered personalised product recommendations',
+      status: 'approved',
+      summary: 'AI-driven personalised recommendations are generating measurable basket uplift (18%+ in pilots) and improving repeat purchase rates. Hyper-personalisation beyond category-level is emerging as the next step, enabled by first-party purchase history and browsing data.',
+      horizon: 'short',
+      likelihoodScore: 0.78,
+      confidenceScore: 0.76,
+      momentumScore: 0.70,
+      impactScore: 0.82,
+      maturityStage: 'growth',
+      relatedSignalIds: ['sig-6', 'sig-7'],
+      drivers: ['Rich first-party data available in grocery', 'Proven basket uplift from personalisation', 'Consumer expectation of relevance set by streaming and social platforms'],
+      blockers: ['Data privacy concerns and consent requirements', 'Recommendation diversity vs filter bubble risk', 'Model refresh latency'],
+      whatNeedsToBeTrue: ['Customer consents to personalisation use', 'Recommendation models refresh at least daily', 'Personalisation does not conflict with sponsored placement objectives'],
+      leadingIndicators: ['Basket size uplift in personalisation cohort vs control', 'Customer opt-in rate for personalised recommendations', 'Competitor personalisation feature launches'],
+      monitoringQuestions: ['What is the current personalisation coverage across the product catalogue?', 'How does personalisation interact with sponsored placement ranking?', 'Are privacy regulations changing consent requirements?'],
+      recommendedActions: ['Expand personalisation from category to SKU level', 'Implement a basket uplift measurement framework', 'Review consent and transparency approach against emerging regulation'],
+      createdAt: '2026-01-15',
+      updatedAt: '2026-01-20',
+    },
+  ];
+
+  // Seed the Woolworths NZ strategic context for Phase 3
+  state.strategicContext = {
+    id: 'ctx-woolworths-nz',
+    industryProfileId: 'ind-1',
+    companyName: 'Woolworths NZ',
+    businessModel: 'Online grocery retailer providing AI-enhanced discovery, search, and personalised shopping experiences',
+    targetCustomers: ['Home shoppers', 'Busy families', 'Health-conscious consumers', 'Budget-conscious shoppers'],
+    strategicGoals: [
+      'Improve search conversion and reduce zero-result rates',
+      'Increase average basket size through personalisation',
+      'Grow retail media revenue without degrading customer experience',
+      'Build AI-assisted discovery capabilities ahead of competitors',
+      'Improve customer trust in algorithmic recommendations',
+    ],
+    currentCapabilities: [
+      'Keyword search with basic relevance ranking',
+      'Retail media placement system',
+      'Customer purchase history and first-party data',
+      'Basic category-level personalisation',
+      'Analytics event tracking',
+      'Mobile app and web storefront',
+    ],
+    constraints: [
+      'Data quality varies across product catalogue',
+      'Sponsored placement revenue goals may conflict with search relevance',
+      'Limited AI/ML implementation capacity',
+      'Customer trust is critical — high reputational risk from poor AI behaviour',
+      'Regulatory concern around AI transparency and ad disclosure may increase',
+    ],
+    riskAppetite: 'medium',
+    planningHorizons: ['3 months', '6 months', '12 months', '24 months'],
+  };
+
   state.evidences = [];
 }
+
 
 // Seed on first load
 seedData();
@@ -264,6 +444,21 @@ export function resetMockData() {
   globalThis.__mockRepoState = undefined;
   initState();
   seedData();
+}
+
+export function clearDynamicData() {
+  if (globalThis.__mockRepoState) {
+    globalThis.__mockRepoState.signals = [];
+    globalThis.__mockRepoState.trends = [];
+    globalThis.__mockRepoState.evidences = [];
+    globalThis.__mockRepoState.assumptions = [];
+    globalThis.__mockRepoState.leadingIndicators = [];
+    globalThis.__mockRepoState.strategicImplications = [];
+    globalThis.__mockRepoState.scenarios = [];
+    globalThis.__mockRepoState.strategicOptions = [];
+    globalThis.__mockRepoState.decisionBriefs = [];
+    globalThis.__mockRepoState.roadmapItems = [];
+  }
 }
 
 // ----- Industry -----
@@ -374,6 +569,10 @@ export function updateTrend(trendId: string, patch: Partial<Trend>): void {
 }
 
 // ----- Evidence -----
+export function getEvidences(): EvidenceLink[] {
+  return [...globalThis.__mockRepoState!.evidences];
+}
+
 export function getEvidenceForTrend(trendId: string): EvidenceLink[] {
   return globalThis.__mockRepoState!.evidences.filter((e) => e.trendId === trendId);
 }
@@ -512,7 +711,12 @@ export function getAssumptions(): Assumption[] {
 }
 
 export function saveAssumptions(items: Assumption[]): void {
-  globalThis.__mockRepoState!.assumptions = [...globalThis.__mockRepoState!.assumptions, ...items];
+  const current = globalThis.__mockRepoState!.assumptions;
+  items.forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id);
+    if (idx !== -1) current[idx] = item;
+    else current.push(item);
+  });
 }
 
 export function updateAssumption(id: string, patch: Partial<Assumption>): void {
@@ -526,7 +730,12 @@ export function getLeadingIndicators(): LeadingIndicator[] {
 }
 
 export function saveLeadingIndicators(items: LeadingIndicator[]): void {
-  globalThis.__mockRepoState!.leadingIndicators = [...globalThis.__mockRepoState!.leadingIndicators, ...items];
+  const current = globalThis.__mockRepoState!.leadingIndicators;
+  items.forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id);
+    if (idx !== -1) current[idx] = item;
+    else current.push(item);
+  });
 }
 
 export function updateLeadingIndicator(id: string, patch: Partial<LeadingIndicator>): void {
@@ -540,7 +749,12 @@ export function getStrategicImplications(): StrategicImplication[] {
 }
 
 export function saveStrategicImplications(items: StrategicImplication[]): void {
-  globalThis.__mockRepoState!.strategicImplications = [...globalThis.__mockRepoState!.strategicImplications, ...items];
+  const current = globalThis.__mockRepoState!.strategicImplications;
+  items.forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id);
+    if (idx !== -1) current[idx] = item;
+    else current.push(item);
+  });
 }
 
 export function getScenarios(): Scenario[] {
@@ -548,7 +762,12 @@ export function getScenarios(): Scenario[] {
 }
 
 export function saveScenarios(items: Scenario[]): void {
-  globalThis.__mockRepoState!.scenarios = [...globalThis.__mockRepoState!.scenarios, ...items];
+  const current = globalThis.__mockRepoState!.scenarios;
+  items.forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id);
+    if (idx !== -1) current[idx] = item;
+    else current.push(item);
+  });
 }
 
 export function getStrategicOptions(): StrategicOption[] {
@@ -556,7 +775,12 @@ export function getStrategicOptions(): StrategicOption[] {
 }
 
 export function saveStrategicOptions(items: StrategicOption[]): void {
-  globalThis.__mockRepoState!.strategicOptions = [...globalThis.__mockRepoState!.strategicOptions, ...items];
+  const current = globalThis.__mockRepoState!.strategicOptions;
+  items.forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id);
+    if (idx !== -1) current[idx] = item;
+    else current.push(item);
+  });
 }
 
 export function updateStrategicOption(id: string, patch: Partial<StrategicOption>): void {
@@ -581,7 +805,12 @@ export function getRoadmapItems(): RoadmapItem[] {
 }
 
 export function saveRoadmapItems(items: RoadmapItem[]): void {
-  globalThis.__mockRepoState!.roadmapItems = [...globalThis.__mockRepoState!.roadmapItems, ...items];
+  const current = globalThis.__mockRepoState!.roadmapItems;
+  items.forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id);
+    if (idx !== -1) current[idx] = item;
+    else current.push(item);
+  });
 }
 
 export function updateRoadmapItem(id: string, patch: Partial<RoadmapItem>): void {

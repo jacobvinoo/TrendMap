@@ -35,6 +35,7 @@ import ImplicationsScreen from './ImplicationsScreen';
 import ScenariosScreen from './ScenariosScreen';
 import StrategicOptionsScreen from './StrategicOptionsScreen';
 import DecisionBriefScreen from './DecisionBriefScreen';
+import RoadmapScreen from './RoadmapScreen';
 
 // Lazy-load the debug panel – only bundled in dev
 const LazyTraceabilityPanel = import.meta.env.DEV
@@ -47,32 +48,49 @@ const LazyTraceabilityPanel = import.meta.env.DEV
 
 type Tab = 'setup' | 'sources' | 'documents' | 'signals' | 'trends' | 'insights'
   | 'monitoring' | 'alerts'
-  | 'strategy' | 'assumptions' | 'indicators' | 'implications' | 'scenarios' | 'options' | 'brief'
+  | 'strategy' | 'assumptions' | 'indicators' | 'implications' | 'scenarios' | 'options' | 'brief' | 'roadmap'
   | 'debug-traceability';
 
-const TABS: { id: Tab; label: string; group?: string }[] = [
-  { id: 'setup',    label: 'Setup' },
-  { id: 'sources',  label: 'Sources' },
-  { id: 'documents',label: 'Documents' },
-  { id: 'signals',  label: 'Signals' },
-  { id: 'trends',   label: 'Trends' },
-  { id: 'insights', label: 'Insights' },
-  { id: 'monitoring', label: 'Monitoring' },
-  { id: 'alerts',   label: 'Alerts' },
-  // Phase 3
-  { id: 'strategy',    label: 'Strategy',     group: 'p3' },
-  { id: 'assumptions', label: 'Assumptions',  group: 'p3' },
-  { id: 'indicators',  label: 'Indicators',   group: 'p3' },
-  { id: 'implications',label: 'Implications', group: 'p3' },
-  { id: 'scenarios',   label: 'Scenarios',    group: 'p3' },
-  { id: 'options',     label: 'Options',      group: 'p3' },
-  { id: 'brief',       label: 'Brief',        group: 'p3' },
+const TAB_GROUPS = [
+  {
+    title: 'Phase 1: Discovery',
+    tabs: [
+      { id: 'setup',    label: 'Industry Setup' },
+      { id: 'sources',  label: 'Sources' },
+      { id: 'documents',label: 'Documents' },
+      { id: 'signals',  label: 'Signals' },
+      { id: 'trends',   label: 'Trends' },
+      { id: 'insights', label: 'Insights' },
+    ]
+  },
+  {
+    title: 'Phase 2: Monitoring',
+    tabs: [
+      { id: 'monitoring', label: 'Dashboard' },
+      { id: 'alerts',   label: 'Alerts' },
+    ]
+  },
+  {
+    title: 'Phase 3: Strategy',
+    tabs: [
+      { id: 'strategy',    label: 'Strategy Context' },
+      { id: 'assumptions', label: 'Assumptions' },
+      { id: 'indicators',  label: 'Indicators' },
+      { id: 'implications',label: 'Implications' },
+      { id: 'scenarios',   label: 'Scenarios' },
+      { id: 'options',     label: 'Options' },
+      { id: 'brief',       label: 'Decision Brief' },
+      { id: 'roadmap',     label: 'Roadmap' },
+    ]
+  }
 ];
+
+const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
 
 function getTabFromHash(hash: string): Tab {
   const clean = hash.replace('#', '') as Tab;
   if (clean === 'debug-traceability') return clean;
-  return TABS.some((t) => t.id === clean) ? clean : 'setup';
+  return ALL_TABS.some((t) => t.id === clean) ? clean : 'setup';
 }
 
 function App() {
@@ -105,75 +123,83 @@ function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0f0f1a', color: '#e0e0ff', fontFamily: 'Inter, system-ui, sans-serif' }}>
-      {/* ── Navigation bar ──────────────────────────────────────── */}
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'row', background: '#0f0f1a', color: '#e0e0ff', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* ── Sidebar Navigation ──────────────────────────────────────── */}
       <nav
         aria-label="Main navigation"
         style={{
+          width: '260px',
           display: 'flex',
-          alignItems: 'center',
-          gap: '0',
+          flexDirection: 'column',
           background: '#13132b',
-          borderBottom: '1px solid #2a2a4a',
-          padding: '0 1.5rem',
+          borderRight: '1px solid #2a2a4a',
+          overflowY: 'auto',
+          flexShrink: 0,
         }}
       >
         {/* Logo / brand */}
-        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#a0a0ff', marginRight: '2rem', padding: '0.75rem 0' }}>
-          TrendMap
-        </span>
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #2a2a4a', marginBottom: '1rem' }}>
+          <span style={{ fontWeight: 700, fontSize: '1.25rem', color: '#a0a0ff' }}>
+            TrendMap
+          </span>
+        </div>
 
-        {/* Primary tabs */}
-        {TABS.map((tab, i) => (
-          <>
-            {tab.group === 'p3' && TABS[i - 1]?.group !== 'p3' && (
-              <span key={`div-${tab.id}`} style={{ width: '1px', background: '#2a2a4a', margin: '0.5rem 0.75rem', alignSelf: 'stretch' }} />
-            )}
-            <a
-              key={tab.id}
-              href={`#${tab.id}`}
-              onClick={(e) => { e.preventDefault(); handleTabClick(tab.id); }}
-              aria-current={activeTab === tab.id ? 'page' : undefined}
-              style={{
-                padding: '0.85rem 1.1rem',
-                color: activeTab === tab.id
-                  ? (tab.group === 'p3' ? '#c084fc' : '#a0a0ff')
-                  : '#888',
-                textDecoration: 'none',
-                borderBottom: activeTab === tab.id
-                  ? `2px solid ${tab.group === 'p3' ? '#a855f7' : '#7c7cff'}`
-                  : '2px solid transparent',
-                fontSize: '0.9rem',
-                fontWeight: activeTab === tab.id ? 600 : 400,
-                transition: 'color 0.15s, border-color 0.15s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {tab.label}
-            </a>
-          </>
-        ))}
+        <div style={{ padding: '0 1rem 1rem' }}>
+          {TAB_GROUPS.map((group, gIdx) => (
+            <div key={gIdx} style={{ marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', paddingLeft: '0.75rem' }}>
+                {group.title}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {group.tabs.map(tab => (
+                  <a
+                    key={tab.id}
+                    href={`#${tab.id}`}
+                    onClick={(e) => { e.preventDefault(); handleTabClick(tab.id as Tab); }}
+                    aria-current={activeTab === tab.id ? 'page' : undefined}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '0.375rem',
+                      color: activeTab === tab.id ? '#fff' : '#888',
+                      background: activeTab === tab.id ? '#2a2a4a' : 'transparent',
+                      textDecoration: 'none',
+                      fontSize: '0.875rem',
+                      fontWeight: activeTab === tab.id ? 500 : 400,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {tab.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
 
-        {/* Dev-only traceability link */}
-        {import.meta.env.DEV && (
-          <a
-            href="#debug-traceability"
-            onClick={(e) => { e.preventDefault(); handleTabClick('debug-traceability' as Tab); }}
-            style={{
-              marginLeft: 'auto',
-              padding: '0.85rem 1rem',
-              color: '#5a5aff',
-              textDecoration: 'none',
-              fontSize: '0.8rem',
-            }}
-          >
-            🔍 Traceability
-          </a>
-        )}
+          {/* Dev-only traceability link */}
+          {import.meta.env.DEV && (
+            <div style={{ marginTop: '2rem', borderTop: '1px solid #2a2a4a', paddingTop: '1rem' }}>
+              <a
+                href="#debug-traceability"
+                onClick={(e) => { e.preventDefault(); handleTabClick('debug-traceability' as Tab); }}
+                style={{
+                  display: 'block',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  color: activeTab === 'debug-traceability' ? '#fff' : '#5a5aff',
+                  background: activeTab === 'debug-traceability' ? '#2a2a4a' : 'transparent',
+                  textDecoration: 'none',
+                  fontSize: '0.875rem',
+                }}
+              >
+                🔍 Traceability
+              </a>
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* ── Screen content ─────────────────────────────────────── */}
-      <main style={{ flex: 1, overflowY: 'auto' }}>
+      <main style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'setup'    && <IndustrySetup />}
         {activeTab === 'sources'  && <SourceLibrary />}
         {activeTab === 'documents'&& <DocumentIntake />}
@@ -197,6 +223,7 @@ function App() {
         {activeTab === 'scenarios'    && <ScenariosScreen />}
         {activeTab === 'options'      && <StrategicOptionsScreen />}
         {activeTab === 'brief'        && <DecisionBriefScreen />}
+        {activeTab === 'roadmap'      && <RoadmapScreen />}
       </main>
     </div>
   );

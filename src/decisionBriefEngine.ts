@@ -43,11 +43,11 @@ export function generateDecisionBrief(
   const topOptionTitle = sortedOptions[0]?.title ?? 'recommended action';
 
   const headline =
-    `${context.companyName}: ${opportunities.length} opportunity${opportunities.length !== 1 ? 'ies' : 'y'}, ` +
+    `${context.companyName}: ${opportunities.length} opportunit${opportunities.length !== 1 ? 'ies' : 'y'}, ` +
     `${threats.length} threat${threats.length !== 1 ? 's' : ''}, ${sortedOptions.length} recommended option${sortedOptions.length !== 1 ? 's' : ''}`;
 
   const executiveSummary =
-    `Strategic analysis for ${context.companyName} identifies ${opportunities.length} key opportunity${opportunities.length !== 1 ? 'ies' : 'y'} ` +
+    `Strategic analysis for ${context.companyName} identifies ${opportunities.length} key opportunit${opportunities.length !== 1 ? 'ies' : 'y'} ` +
     `and ${threats.length} threat${threats.length !== 1 ? 's' : ''} requiring attention within ${context.planningHorizons[0] ?? '12 months'}. ` +
     `The highest-priority opportunity is "${topOppTitle}". ` +
     `The most urgent threat is "${topThreatTitle}". ` +

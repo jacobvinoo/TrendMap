@@ -13,13 +13,13 @@ import {
   updateTrendStatus,
   updateTrend,
   getEvidenceForTrend,
-  resetMockData,
+  resetMockData, clearDynamicData,
   addEvidence,
 } from './mockRepository';
 import type { IndustryProfile, Signal, TrendStatus, Trend, EvidenceLink } from './types';
 
 beforeEach(() => {
-  resetMockData();
+  resetMockData(); clearDynamicData();
 });
 
 describe('Industry Profile repository', () => {

@@ -16,10 +16,10 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import SourceLibrary from '../SourceLibrary';
 import TrendReviewBoard from '../TrendReviewBoard';
 import SignalsScreen from '../SignalsScreen';
-import { resetMockData } from '../mockRepository';
+import { resetMockData, clearDynamicData } from '../mockRepository';
 
 describe('Accessibility – forms have labels', () => {
-  beforeEach(() => resetMockData());
+  beforeEach(() => { resetMockData(); clearDynamicData(); });
 
   test('SourceLibrary note input has aria-label', () => {
     render(<SourceLibrary />);
@@ -41,7 +41,7 @@ describe('Accessibility – forms have labels', () => {
 });
 
 describe('Accessibility – status shown as text, not colour only', () => {
-  beforeEach(() => resetMockData());
+  beforeEach(() => { resetMockData(); clearDynamicData(); });
 
   test('SourceLibrary shows status as text ("suggested"/"approved"/"rejected")', () => {
     render(<SourceLibrary />);
@@ -76,7 +76,7 @@ describe('Accessibility – status shown as text, not colour only', () => {
 });
 
 describe('Accessibility – score labels have text values', () => {
-  beforeEach(() => resetMockData());
+  beforeEach(() => { resetMockData(); clearDynamicData(); });
 
   test('SourceLibrary renders credibility as a percentage string', () => {
     render(<SourceLibrary />);
@@ -86,7 +86,7 @@ describe('Accessibility – score labels have text values', () => {
 });
 
 describe('Accessibility – empty states are descriptive', () => {
-  beforeEach(() => resetMockData());
+  beforeEach(() => { resetMockData(); clearDynamicData(); });
 
   test('SignalsScreen shows descriptive empty state text', () => {
     render(<SignalsScreen />);
@@ -100,7 +100,7 @@ describe('Accessibility – empty states are descriptive', () => {
 });
 
 describe('Accessibility – cards are keyboard navigable', () => {
-  beforeEach(() => resetMockData());
+  beforeEach(() => { resetMockData(); clearDynamicData(); });
 
 
   test('TrendReviewBoard cards have tabIndex=0', async () => {

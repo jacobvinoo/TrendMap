@@ -16,14 +16,14 @@ describe('App shell', () => {
     render(<App />);
     const nav = screen.getByRole('navigation', { name: /main navigation/i });
     expect(nav).toBeInTheDocument();
-    for (const label of ['Setup', 'Sources', 'Documents', 'Signals', 'Trends', 'Insights']) {
+    for (const label of ['Industry Setup', 'Sources', 'Documents', 'Signals', 'Trends', 'Insights']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });
 
   test('Setup tab is active by default and renders IndustrySetup', () => {
     render(<App />);
-    const setupLink = screen.getByRole('link', { name: 'Setup' });
+    const setupLink = screen.getByRole('link', { name: 'Industry Setup' });
     expect(setupLink).toHaveAttribute('aria-current', 'page');
     // IndustrySetup renders an industry-name input
     expect(screen.getByLabelText('industry-name')).toBeInTheDocument();

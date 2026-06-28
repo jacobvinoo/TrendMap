@@ -14,7 +14,7 @@
  */
 import { describe, test, expect, beforeEach } from 'vitest';
 import { validateTraceability } from './traceabilityValidation';
-import { resetMockData, saveTrends, saveSignals, addEvidence, updateSourceStatus } from './mockRepository';
+import { resetMockData, clearDynamicData, saveTrends, saveSignals, addEvidence, updateSourceStatus } from './mockRepository';
 import type { Trend, Signal, EvidenceLink } from './types';
 
 function makeTrend(overrides: Partial<Trend> = {}): Trend {
@@ -51,7 +51,7 @@ function makeEvidence(overrides: Partial<EvidenceLink> = {}): EvidenceLink {
 }
 
 describe('Traceability health – integration', () => {
-  beforeEach(() => resetMockData());
+  beforeEach(() => { resetMockData(); clearDynamicData(); });
 
   test('no orphan links in clean data', () => {
     const trend = makeTrend();

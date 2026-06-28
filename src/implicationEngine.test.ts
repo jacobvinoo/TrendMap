@@ -59,37 +59,49 @@ const lowImpactTrend: Trend = {
   updatedAt: '2026-01-01',
 };
 
+const mockEvidences = [
+  {
+    id: 'ev1',
+    trendId: 't1',
+    signalId: 'sig1',
+    documentId: 'doc1',
+    sourceId: 'src1',
+    quote: 'Quote 1',
+    relevanceReason: 'Reason 1',
+  }
+];
+
 describe('generateStrategicImplications', () => {
   it('only generates implications for approved trends', () => {
     const rejected = { ...highImpactTrend, id: 't99', status: 'rejected' as const };
-    const implications = generateStrategicImplications([highImpactTrend, rejected], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend, rejected], mockContext, mockEvidences);
     expect(implications.every(si => si.trendId !== 't99')).toBe(true);
   });
 
   it('generates at least one implication per approved trend', () => {
-    const implications = generateStrategicImplications([highImpactTrend, lowImpactTrend], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend, lowImpactTrend], mockContext, mockEvidences);
     const trendIds = [...new Set(implications.map(si => si.trendId))];
     expect(trendIds).toContain('t1');
     expect(trendIds).toContain('t2');
   });
 
   it('generates an opportunity implication for high-impact trends', () => {
-    const implications = generateStrategicImplications([highImpactTrend], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
     expect(implications.some(si => si.implicationType === 'opportunity')).toBe(true);
   });
 
   it('generates a risk implication for trends with blockers', () => {
-    const implications = generateStrategicImplications([highImpactTrend], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
     expect(implications.some(si => si.implicationType === 'risk')).toBe(true);
   });
 
   it('each implication has a non-empty title and summary', () => {
-    const implications = generateStrategicImplications([highImpactTrend], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
     expect(implications.every(si => si.title.length > 0 && si.summary.length > 0)).toBe(true);
   });
 
   it('each implication has scores in range 0-1', () => {
-    const implications = generateStrategicImplications([highImpactTrend], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
     for (const si of implications) {
       expect(si.urgencyScore).toBeGreaterThanOrEqual(0);
       expect(si.urgencyScore).toBeLessThanOrEqual(1);
@@ -101,19 +113,19 @@ describe('generateStrategicImplications', () => {
   });
 
   it('links evidence from the trend signals', () => {
-    const implications = generateStrategicImplications([highImpactTrend], mockContext);
+    const implications = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
     const withEvidence = implications.filter(si => si.evidenceIds.length > 0);
     expect(withEvidence.length).toBeGreaterThan(0);
   });
 
   it('is deterministic', () => {
-    const r1 = generateStrategicImplications([highImpactTrend], mockContext);
-    const r2 = generateStrategicImplications([highImpactTrend], mockContext);
+    const r1 = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
+    const r2 = generateStrategicImplications([highImpactTrend], mockContext, mockEvidences);
     expect(r1.map(si => si.id)).toEqual(r2.map(si => si.id));
   });
 
   it('returns empty for no approved trends', () => {
     const candidate = { ...highImpactTrend, status: 'candidate' as const };
-    expect(generateStrategicImplications([candidate], mockContext)).toHaveLength(0);
+    expect(generateStrategicImplications([candidate], mockContext, mockEvidences)).toHaveLength(0);
   });
 });

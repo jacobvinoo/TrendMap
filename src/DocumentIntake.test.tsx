@@ -3,11 +3,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, beforeEach } from 'vitest';
 import DocumentIntake from './DocumentIntake';
-import { resetMockData, getSignals } from './mockRepository';
+import { resetMockData, clearDynamicData, getSignals } from './mockRepository';
 
 describe('DocumentIntake', () => {
   beforeEach(() => {
-    resetMockData();
+    resetMockData(); clearDynamicData();
   });
 
   it('renders default view showing only documents from approved sources', () => {

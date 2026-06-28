@@ -4,7 +4,8 @@
  * from approved trends and strategic context.
  */
 
-import type { Trend, StrategicContext, StrategicImplication, ImplicationType } from './types';
+import { getEvidences } from './mockRepository';
+import type { Trend, StrategicContext, StrategicImplication, ImplicationType, EvidenceLink } from './types';
 
 function clamp(v: number): number {
   return Math.min(1, Math.max(0, Math.round(v * 100) / 100));
@@ -83,10 +84,12 @@ const SPECS: ImplicationSpec[] = [
 
 export function generateStrategicImplications(
   trends: Trend[],
-  context: StrategicContext
+  context: StrategicContext,
+  allEvidences?: EvidenceLink[]
 ): StrategicImplication[] {
   const approved = trends.filter(t => t.status === 'approved');
   const implications: StrategicImplication[] = [];
+  const evidences = allEvidences ?? getEvidences();
 
   for (const trend of approved) {
     for (const spec of SPECS) {
@@ -103,7 +106,10 @@ export function generateStrategicImplications(
         urgencyScore: spec.urgencyFn(trend),
         impactScore: spec.impactFn(trend),
         confidenceScore: spec.confidenceFn(trend),
-        evidenceIds: trend.relatedSignalIds.slice(0, 3),
+        evidenceIds: [...new Set(evidences
+          .filter(e => e.trendId === trend.id && trend.relatedSignalIds.includes(e.signalId))
+          .map(e => e.signalId))]
+          .slice(0, 3),
       });
     }
   }

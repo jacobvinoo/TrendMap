@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { runMonitoringRule } from './monitoringRun';
 import { 
-  resetMockData, 
+  resetMockData, clearDynamicData, 
   saveMonitoringRule, 
   getTrends, 
   getAlerts,
@@ -13,7 +13,7 @@ import {
 
 describe('Integration Path: Baseline to New Activity', () => {
   beforeEach(() => {
-    resetMockData();
+    resetMockData(); clearDynamicData();
   });
 
   it('runs baseline then new_activity and asserts full lifecycle', async () => {

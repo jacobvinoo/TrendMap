@@ -23,13 +23,19 @@ describe('StrategyScreen', () => {
 
   it('renders default mock context with company name', async () => {
     render(<StrategyScreen />);
-    expect(screen.getByRole('heading', { name: /strategic context/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /strategy/i })).toBeInTheDocument();
+    
+    // Switch to context tab
+    fireEvent.click(screen.getByRole('button', { name: /context settings/i }));
+    
     const companyInput = screen.getByLabelText(/company name/i);
     expect(companyInput).toBeInTheDocument();
   });
 
   it('user can edit company name', async () => {
     render(<StrategyScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /context settings/i }));
+    
     const companyInput = screen.getByLabelText(/company name/i);
     fireEvent.change(companyInput, { target: { value: 'New Company Name' } });
     expect((companyInput as HTMLInputElement).value).toBe('New Company Name');
@@ -37,6 +43,8 @@ describe('StrategyScreen', () => {
 
   it('user can add a strategic goal', async () => {
     render(<StrategyScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /context settings/i }));
+    
     const goalInput = screen.getByPlaceholderText(/add strategic goal/i);
     fireEvent.change(goalInput, { target: { value: 'Increase market share' } });
     const addButton = screen.getByRole('button', { name: /add goal/i });
@@ -46,6 +54,8 @@ describe('StrategyScreen', () => {
 
   it('user can change risk appetite', async () => {
     render(<StrategyScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /context settings/i }));
+    
     const select = screen.getByLabelText(/risk appetite/i);
     fireEvent.change(select, { target: { value: 'high' } });
     expect((select as HTMLSelectElement).value).toBe('high');
@@ -53,6 +63,8 @@ describe('StrategyScreen', () => {
 
   it('save button persists context', async () => {
     render(<StrategyScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /context settings/i }));
+    
     const companyInput = screen.getByLabelText(/company name/i);
     fireEvent.change(companyInput, { target: { value: 'Woolworths NZ' } });
     const saveButton = screen.getByRole('button', { name: /save context/i });
@@ -64,6 +76,8 @@ describe('StrategyScreen', () => {
 
   it('shows validation error when company name is empty', async () => {
     render(<StrategyScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /context settings/i }));
+    
     const companyInput = screen.getByLabelText(/company name/i);
     fireEvent.change(companyInput, { target: { value: '' } });
     const saveButton = screen.getByRole('button', { name: /save context/i });

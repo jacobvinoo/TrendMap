@@ -3,11 +3,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, beforeEach } from 'vitest';
 import SignalsScreen from './SignalsScreen';
-import { resetMockData, saveSignals, getTrends } from './mockRepository';
+import { resetMockData, clearDynamicData, saveSignals, getTrends } from './mockRepository';
 
 describe('SignalsScreen', () => {
   beforeEach(() => {
-    resetMockData();
+    resetMockData(); clearDynamicData();
   });
 
   it('renders Signals Screen and Generate Trends button', async () => {
