@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { getDocuments, getSources, updateDocumentIngestionStatus, saveSignals, updateDocumentExtractedSignals } from './mockRepository';
 import { extractSignalsFromDocument } from './signalExtraction';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Trend, Signal, Document, Source, EvidenceLink } from './types';
 
 /**

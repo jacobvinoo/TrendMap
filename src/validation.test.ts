@@ -149,3 +149,200 @@ describe('EvidenceLink validation', () => {
     expect(isValidEvidenceLink(bad)).toBe(false);
   });
 });
+
+// --- Phase 2 Monitoring Validation Tests ---
+
+import {
+  isValidMonitoringRule,
+  isValidMonitoringRun,
+  isValidSourceSnapshot,
+  isValidChangeEvent,
+  isValidTrendScoreSnapshot,
+  isValidTrendScoreChange,
+  isValidAlert,
+  isValidWhatChangedSummary,
+} from './validation';
+
+describe('MonitoringRule validation', () => {
+  const validRule = {
+    id: 'rule-1',
+    sourceId: 'src-1',
+    industryProfileId: 'ind-1',
+    frequency: 'weekly' as const,
+    enabled: true,
+    keywords: [],
+    includePatterns: [],
+    excludePatterns: [],
+    lastRunAt: '2026-01-01T00:00:00Z',
+    nextRunAt: '2026-01-08T00:00:00Z',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidMonitoringRule(validRule)).toBe(true);
+  });
+
+  test('invalid frequency returns false', () => {
+    const bad = { ...validRule, frequency: 'hourly' };
+    expect(isValidMonitoringRule(bad as any)).toBe(false);
+  });
+});
+
+describe('MonitoringRun validation', () => {
+  const validRun = {
+    id: 'run-1',
+    ruleId: 'rule-1',
+    sourceId: 'src-1',
+    startedAt: '2026-01-01T00:00:00Z',
+    completedAt: '2026-01-01T00:05:00Z',
+    status: 'completed' as const,
+    documentsScanned: 10,
+    newDocumentsFound: 2,
+    updatedDocumentsFound: 0,
+    newSignalsFound: 1,
+    affectedTrendIds: [],
+    alertIds: [],
+    errorMessage: '',
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidMonitoringRun(validRun)).toBe(true);
+  });
+
+  test('invalid status returns false', () => {
+    const bad = { ...validRun, status: 'unknown' };
+    expect(isValidMonitoringRun(bad as any)).toBe(false);
+  });
+});
+
+describe('SourceSnapshot validation', () => {
+  const validSnapshot = {
+    id: 'snap-1',
+    sourceId: 'src-1',
+    capturedAt: '2026-01-01T00:00:00Z',
+    documentFingerprints: [],
+    rawMetadata: {},
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidSourceSnapshot(validSnapshot)).toBe(true);
+  });
+});
+
+describe('ChangeEvent validation', () => {
+  const validChange = {
+    id: 'change-1',
+    sourceId: 'src-1',
+    documentId: 'doc-1',
+    changeType: 'new_document' as const,
+    detectedAt: '2026-01-01T00:00:00Z',
+    previousSnapshotId: 'snap-1',
+    currentSnapshotId: 'snap-2',
+    summary: 'New document found',
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidChangeEvent(validChange)).toBe(true);
+  });
+});
+
+describe('TrendScoreSnapshot validation', () => {
+  const validScoreSnap = {
+    id: 'tsnap-1',
+    trendId: 'tr-1',
+    capturedAt: '2026-01-01T00:00:00Z',
+    likelihoodScore: 0.5,
+    confidenceScore: 0.5,
+    impactScore: 0.5,
+    horizon: '1-3 years',
+    maturityStage: 'emerging',
+    evidenceCount: 1,
+    signalCount: 1,
+    sourceDiversity: 1,
+    reason: 'Initial state',
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidTrendScoreSnapshot(validScoreSnap)).toBe(true);
+  });
+
+  test('invalid score returns false', () => {
+    const bad = { ...validScoreSnap, likelihoodScore: -0.1 };
+    expect(isValidTrendScoreSnapshot(bad)).toBe(false);
+  });
+});
+
+describe('TrendScoreChange validation', () => {
+  const validScoreChange = {
+    id: 'tchange-1',
+    trendId: 'tr-1',
+    previousSnapshotId: 'tsnap-1',
+    currentSnapshotId: 'tsnap-2',
+    changedAt: '2026-01-01T00:00:00Z',
+    likelihoodDelta: 0.1,
+    confidenceDelta: 0,
+    impactDelta: 0,
+    horizonChanged: false,
+    maturityChanged: false,
+    reason: 'Score increased',
+    relatedSignalIds: [],
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidTrendScoreChange(validScoreChange)).toBe(true);
+  });
+
+  test('missing previous snapshot id returns false', () => {
+    const bad = { ...validScoreChange, previousSnapshotId: '' };
+    expect(isValidTrendScoreChange(bad)).toBe(false);
+  });
+});
+
+describe('Alert validation', () => {
+  const validAlert = {
+    id: 'alert-1',
+    trendId: 'tr-1',
+    alertType: 'new_candidate_trend' as const,
+    severity: 'medium' as const,
+    title: 'New Trend',
+    summary: 'Detected new candidate',
+    createdAt: '2026-01-01T00:00:00Z',
+    acknowledged: false,
+    relatedSignalIds: [],
+    relatedDocumentIds: [],
+    relatedSourceIds: [],
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidAlert(validAlert)).toBe(true);
+  });
+
+  test('empty title returns false', () => {
+    const bad = { ...validAlert, title: '' };
+    expect(isValidAlert(bad)).toBe(false);
+  });
+
+  test('invalid severity returns false', () => {
+    const bad = { ...validAlert, severity: 'invalid_severity' };
+    expect(isValidAlert(bad as any)).toBe(false);
+  });
+});
+
+describe('WhatChangedSummary validation', () => {
+  const validSummary = {
+    id: 'what-1',
+    monitoringRunId: 'run-1',
+    generatedAt: '2026-01-01T00:00:00Z',
+    headline: 'Changes detected',
+    newSignals: [],
+    changedTrends: [],
+    newCandidateTrends: [],
+    alerts: [],
+    recommendedActions: [],
+  };
+
+  test('valid object returns true', () => {
+    expect(isValidWhatChangedSummary(validSummary)).toBe(true);
+  });
+});

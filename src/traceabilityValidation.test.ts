@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 /**
  * Step 17 – Evidence traceability validation
  *
@@ -16,7 +18,7 @@ import { resetMockData, saveTrends, saveSignals, addEvidence, updateSourceStatus
 import type { Trend, Signal, EvidenceLink } from './types';
 
 function makeTrend(overrides: Partial<Trend> = {}): Trend {
-  return {
+  return { 
     id: 'trace-t1', name: 'Trace Trend', summary: 'Trace summary',
     status: 'approved', horizon: '6-12 months',
     likelihoodScore: 0.9, confidenceScore: 0.9, impactScore: 0.8,

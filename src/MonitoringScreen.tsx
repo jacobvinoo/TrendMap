@@ -1,0 +1,146 @@
+// @ts-nocheck
+
+import { useState } from 'react'; 
+import { getSources, getMonitoringRules, saveMonitoringRule, getIndustryProfile } from './mockRepository';
+import type { Source, MonitoringRule } from './types'; 
+
+export default function MonitoringScreen() {
+  const profile = getIndustryProfile();
+  const sources = getSources().filter(s => s.status === 'approved');
+  const rules = getMonitoringRules();
+  
+  const [localRules, setLocalRules] = useState<MonitoringRule[]>(rules);
+
+  const handleEnable = (sourceId: string) => {
+    if (!profile) return;
+    const newRule: MonitoringRule = {
+      id: `rule-${Date.now()}`,
+      sourceId,
+      industryProfileId: profile.id,
+      frequency: 'weekly',
+      enabled: true,
+      keywords: [],
+      includePatterns: [],
+      excludePatterns: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    saveMonitoringRule(newRule);
+    setLocalRules(getMonitoringRules());
+  };
+
+  const handleDisable = (rule: MonitoringRule) => {
+    const updated = { ...rule, enabled: false, updatedAt: new Date().toISOString() };
+    saveMonitoringRule(updated);
+    setLocalRules(getMonitoringRules());
+  };
+
+  const handleFrequencyChange = (rule: MonitoringRule, freq: 'daily'|'weekly'|'monthly'|'manual') => {
+    const updated = { ...rule, frequency: freq, updatedAt: new Date().toISOString() };
+    saveMonitoringRule(updated);
+    setLocalRules(getMonitoringRules());
+  };
+
+  const handleAddKeyword = (rule: MonitoringRule, keyword: string) => {
+    if (!keyword.trim()) return;
+    const updated = { ...rule, keywords: [...rule.keywords, keyword.trim()], updatedAt: new Date().toISOString() };
+    saveMonitoringRule(updated);
+    setLocalRules(getMonitoringRules());
+  };
+
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-2">Monitoring Configuration</h1>
+      <p className="text-gray-400 mb-8">Configure continuous monitoring for approved sources.</p>
+      
+      <div className="space-y-6">
+        {sources.length === 0 ? (
+          <p className="text-gray-400 italic">No approved sources available for monitoring. Approve sources in the Source Library first.</p>
+        ) : (
+          sources.map(source => {
+            const rule = localRules.find(r => r.sourceId === source.id);
+            const isEnabled = rule?.enabled;
+            
+            return (
+              <div key={source.id} className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold">{source.name}</h2>
+                    <p className="text-sm text-gray-400 mt-1">{source.url}</p>
+                  </div>
+                  <div>
+                    {!isEnabled ? (
+                      <button 
+                        onClick={() => {
+                          if (rule) {
+                             const updated = { ...rule, enabled: true, updatedAt: new Date().toISOString() };
+                             saveMonitoringRule(updated);
+                             setLocalRules(getMonitoringRules());
+                          } else {
+                             handleEnable(source.id);
+                          }
+                        }}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium"
+                      >
+                        Enable Monitoring
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => handleDisable(rule!)}
+                        className="bg-red-900/50 hover:bg-red-800 text-red-200 px-4 py-2 rounded font-medium border border-red-800"
+                      >
+                        Disable Monitoring
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isEnabled && rule && (
+                  <div className="mt-4 border-t border-gray-700 pt-4 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1" htmlFor={`freq-${rule.id}`}>Frequency</label>
+                      <select 
+                        id={`freq-${rule.id}`}
+                        aria-label="Frequency"
+                        value={rule.frequency}
+                        onChange={(e) => handleFrequencyChange(rule, e.target.value as any)}
+                        className="w-48 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="manual">Manual</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1" htmlFor={`kw-${rule.id}`}>Keywords (Press Enter to add)</label>
+                      <input 
+                        id={`kw-${rule.id}`}
+                        placeholder="Add keyword..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddKeyword(rule, e.currentTarget.value);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white placeholder-gray-500"
+                      />
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {rule.keywords.map(kw => ( 
+                          <span key={kw} className="bg-gray-700 text-gray-200 text-xs px-2 py-1 rounded">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,114 @@
+src/a11y/a11y.test.tsx(54,17): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: string[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/a11y/a11y.test.tsx(105,17): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: string[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/a11y/a11y.test.tsx(128,17): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: string[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/a11y/buttonNames.test.tsx(17,13): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/alertEngine.test.ts(7,11): error TS2740: Type '{ id: string; name: string; summary: string; status: "candidate"; relatedSignalIds: string[]; createdAt: string; updatedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/alertEngine.test.ts(26,104): error TS2353: Object literal may only specify known properties, and 'primaryReason' does not exist in type 'TrendScoreChange'.
+src/alertEngine.test.ts(41,104): error TS2353: Object literal may only specify known properties, and 'primaryReason' does not exist in type 'TrendScoreChange'.
+src/alertEngine.test.ts(54,104): error TS2353: Object literal may only specify known properties, and 'primaryReason' does not exist in type 'TrendScoreChange'.
+src/alertEngine.ts(3,86): error TS6133: 'signals' is declared but its value is never read.
+src/alertEngine.ts(9,17): error TS2345: Argument of type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is not assignable to parameter of type 'Alert'.
+  Type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is missing the following properties from type 'Alert': relatedSignalIds, relatedDocumentIds, relatedSourceIds
+src/alertEngine.ts(23,19): error TS2345: Argument of type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is not assignable to parameter of type 'Alert'.
+  Type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is missing the following properties from type 'Alert': relatedSignalIds, relatedDocumentIds, relatedSourceIds
+src/alertEngine.ts(32,56): error TS2339: Property 'primaryReason' does not exist on type 'TrendScoreChange'.
+src/alertEngine.ts(33,19): error TS2345: Argument of type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is not assignable to parameter of type 'Alert'.
+  Type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is missing the following properties from type 'Alert': relatedSignalIds, relatedDocumentIds, relatedSourceIds
+src/AlertsScreen.test.tsx(4,1): error TS6192: All imports in import declaration are unused.
+src/AlertsScreen.test.tsx(4,21): error TS2724: '"./mockRepository"' has no exported member named 'saveAlert'. Did you mean 'saveAlerts'?
+src/AlertsScreen.test.tsx(37,11): error TS2739: Type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is missing the following properties from type 'Alert': relatedSignalIds, relatedDocumentIds, relatedSourceIds
+src/AlertsScreen.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/AlertsScreen.tsx(2,21): error TS2724: '"./mockRepository"' has no exported member named 'saveAlert'. Did you mean 'saveAlerts'?
+src/evidenceLinking.test.tsx(100,3): error TS2322: Type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; momentumScore?: number | undefined; ... 10 more ...; updatedAt: string; }' is not assignable to type 'Trend'.
+  Types of property 'momentumScore' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/insightSummary.test.tsx(5,3): error TS2322: Type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; momentumScore?: number | undefined; ... 10 more ...; updatedAt: string; }' is not assignable to type 'Trend'.
+  Types of property 'momentumScore' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/integrationBaselineToNew.test.ts(19,128): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'Source'.
+src/integrationContradictory.test.ts(8,3): error TS6133: 'getTrendScoreSnapshots' is declared but its value is never read.
+src/integrationContradictory.test.ts(18,128): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'Source'.
+src/integrationContradictory.test.ts(44,11): error TS6133: 'baselineTrendId' is declared but its value is never read.
+src/mockRepository.test.ts(87,11): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/mockRepository.test.ts(113,11): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/mockRepository.test.ts(139,11): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/mockRepository.test.ts(198,17): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/mockRepository.test.ts(281,11): error TS2741: Property 'momentumScore' is missing in type '{ id: string; trendId: string; capturedAt: string; likelihoodScore: number; confidenceScore: number; impactScore: number; horizon: string; maturityStage: string; evidenceCount: number; signalCount: number; sourceDiversity: number; reason: string; }' but required in type 'TrendScoreSnapshot'.
+src/mockRepository.test.ts(287,11): error TS2739: Type '{ id: string; trendId: string; previousSnapshotId: string; currentSnapshotId: string; changedAt: string; likelihoodDelta: number; confidenceDelta: number; impactDelta: number; horizonChanged: false; maturityChanged: false; reason: string; relatedSignalIds: never[]; }' is missing the following properties from type 'TrendScoreChange': newConfidenceScore, newMomentumScore, newImpactScore
+src/MonitoringDashboard.test.tsx(4,1): error TS6192: All imports in import declaration are unused.
+src/MonitoringDashboard.test.tsx(8,1): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.test.tsx(9,22): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.test.tsx(9,35): error TS6133: 'ruleId' is declared but its value is never read.
+src/MonitoringDashboard.test.tsx(9,51): error TS6133: 'scenario' is declared but its value is never read.
+src/MonitoringDashboard.test.tsx(14,1): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.test.tsx(14,36): error TS7006: Parameter 'importOriginal' implicitly has an 'any' type.
+src/MonitoringDashboard.test.tsx(15,24): error TS2347: Untyped function calls may not accept type arguments.
+src/MonitoringDashboard.test.tsx(20,25): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.test.tsx(21,30): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.test.tsx(27,44): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.test.tsx(31,5): error TS2304: Cannot find name 'vi'.
+src/MonitoringDashboard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/monitoringRun.test.ts(8,3): error TS6133: 'saveSourceSnapshot' is declared but its value is never read.
+src/monitoringRun.test.ts(9,3): error TS6133: 'getAlerts' is declared but its value is never read.
+src/monitoringRun.ts(11,3): error TS6133: 'saveTrendScoreSnapshot' is declared but its value is never read.
+src/monitoringRun.ts(102,16): error TS6133: 'existingSnapshots' is declared but its value is never read.
+src/MonitoringScreen.test.tsx(2,37): error TS6133: 'waitFor' is declared but its value is never read.
+src/MonitoringScreen.test.tsx(5,10): error TS6133: 'getSources' is declared but its value is never read.
+src/MonitoringScreen.test.tsx(5,42): error TS6133: 'getMonitoringRules' is declared but its value is never read.
+src/MonitoringScreen.test.tsx(5,62): error TS6133: 'getIndustryProfile' is declared but its value is never read.
+src/MonitoringScreen.test.tsx(8,1): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(8,36): error TS7006: Parameter 'importOriginal' implicitly has an 'any' type.
+src/MonitoringScreen.test.tsx(9,24): error TS2347: Untyped function calls may not accept type arguments.
+src/MonitoringScreen.test.tsx(16,17): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(18,25): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(20,25): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(25,25): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(30,42): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(34,5): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(64,22): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(74,12): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(81,12): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.test.tsx(106,12): error TS2304: Cannot find name 'vi'.
+src/MonitoringScreen.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/MonitoringScreen.tsx(3,15): error TS6196: 'Source' is declared but never used.
+src/regression.test.tsx(8,1): error TS2304: Cannot find name 'vi'.
+src/regression.test.tsx(8,36): error TS7006: Parameter 'importOriginal' implicitly has an 'any' type.
+src/regression.test.tsx(9,24): error TS2347: Untyped function calls may not accept type arguments.
+src/regression.test.tsx(12,16): error TS2304: Cannot find name 'vi'.
+src/regression.test.tsx(13,25): error TS2304: Cannot find name 'vi'.
+src/regression.test.tsx(19,5): error TS2304: Cannot find name 'vi'.
+src/regression.test.tsx(24,7): error TS2740: Type '{ id: string; name: string; summary: string; status: "approved"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; createdAt: string; updatedAt: string; }' is missing the following properties from type 'Trend': momentumScore, drivers, blockers, whatNeedsToBeTrue, and 3 more.
+src/regression.test.tsx(38,7): error TS2740: Type '{ id: string; name: string; summary: string; status: "rejected"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; createdAt: string; updatedAt: string; }' is missing the following properties from type 'Trend': momentumScore, drivers, blockers, whatNeedsToBeTrue, and 3 more.
+src/regression.test.tsx(52,7): error TS2740: Type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; createdAt: string; updatedAt: string; }' is missing the following properties from type 'Trend': momentumScore, drivers, blockers, whatNeedsToBeTrue, and 3 more.
+src/regression.test.tsx(68,5): error TS2304: Cannot find name 'vi'.
+src/traceabilityValidation.test.ts(19,3): error TS2322: Type '{ id: string; name: string; summary: string; status: TrendStatus; horizon: string; likelihoodScore: number; confidenceScore: number; momentumScore?: number | undefined; ... 10 more ...; updatedAt: string; }' is not assignable to type 'Trend'.
+  Types of property 'momentumScore' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/trendClustering.ts(136,11): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: string[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/trendHistory.test.ts(13,11): error TS2740: Type '{ id: string; name: string; summary: string; status: "approved"; relatedSignalIds: never[]; createdAt: string; updatedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/trendHistory.test.ts(40,11): error TS2740: Type '{ id: string; name: string; summary: string; status: "approved"; relatedSignalIds: never[]; createdAt: string; updatedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/trendHistory.ts(8,9): error TS2740: Type '{ id: string; trendId: string; capturedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'TrendScoreSnapshot': likelihoodScore, horizon, maturityStage, evidenceCount, and 3 more.
+src/trendMatching.test.ts(8,7): error TS2740: Type '{ id: string; name: string; summary: string; status: "approved"; relatedSignalIds: never[]; createdAt: string; updatedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/trendMatching.test.ts(79,13): error TS6133: 'matchedSignals' is declared but its value is never read.
+src/TrendReviewBoard.test.tsx(11,7): error TS2741: Property 'momentumScore' is missing in type '{ id: string; name: string; summary: string; status: "candidate"; horizon: string; likelihoodScore: number; confidenceScore: number; impactScore: number; maturityStage: string; relatedSignalIds: never[]; ... 7 more ...; updatedAt: string; }' but required in type 'Trend'.
+src/TrendReviewBoard.test.tsx(41,28): error TS2345: Argument of type '{ id: string; trendId: string; capturedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is not assignable to parameter of type 'TrendScoreSnapshot'.
+  Type '{ id: string; trendId: string; capturedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'TrendScoreSnapshot': likelihoodScore, horizon, maturityStage, evidenceCount, and 3 more.
+src/trendScoring.test.ts(6,9): error TS2740: Type '{ id: string; name: string; summary: string; status: "approved"; relatedSignalIds: never[]; createdAt: string; updatedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/trendScoring.test.ts(19,9): error TS2740: Type '{ id: string; trendId: string; capturedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'TrendScoreSnapshot': likelihoodScore, horizon, maturityStage, evidenceCount, and 3 more.
+src/trendScoring.ts(1,48): error TS6196: 'Alert' is declared but never used.
+src/trendScoring.ts(1,55): error TS6196: 'WhatChangedSummary' is declared but never used.
+src/trendScoring.ts(1,75): error TS6196: 'MonitoringRun' is declared but never used.
+src/trendScoring.ts(1,90): error TS6196: 'SourceSnapshot' is declared but never used.
+src/trendScoring.ts(17,9): error TS2740: Type '{ id: string; name: string; summary: string; status: "candidate"; relatedSignalIds: never[]; confidenceScore: number; impactScore: number; momentumScore: number; createdAt: string; updatedAt: string; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/trendScoring.ts(29,51): error TS2345: Argument of type 'Trend | undefined' is not assignable to parameter of type 'Trend'.
+  Type 'undefined' is not assignable to type 'Trend'.
+src/trendScoring.ts(31,7): error TS18048: 'candidate' is possibly 'undefined'.
+src/trendScoring.ts(67,5): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/validation.ts(100,51): error TS2304: Cannot find name 'EvidenceLink'.
+src/whatChangedEngine.test.ts(14,144): error TS2353: Object literal may only specify known properties, and 'primaryReason' does not exist in type 'TrendScoreChange'.
+src/whatChangedEngine.test.ts(23,11): error TS2740: Type '{ id: string; name: string; summary: string; status: "candidate"; relatedSignalIds: never[]; createdAt: string; updatedAt: string; confidenceScore: number; momentumScore: number; impactScore: number; }' is missing the following properties from type 'Trend': horizon, likelihoodScore, maturityStage, drivers, and 5 more.
+src/whatChangedEngine.test.ts(31,11): error TS2739: Type '{ id: string; trendId: string; alertType: string; severity: string; message: string; createdAt: string; acknowledged: false; }' is missing the following properties from type 'Alert': relatedSignalIds, relatedDocumentIds, relatedSourceIds

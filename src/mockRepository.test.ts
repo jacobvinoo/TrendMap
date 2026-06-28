@@ -1,3 +1,4 @@
+
 import { describe, expect, test, beforeEach } from 'vitest';
 import {
   getIndustryProfile,
@@ -83,8 +84,9 @@ describe('Signal repository', () => {
 });
 
 describe('Trend repository', () => {
+
   test('saves and retrieves trends', () => {
-    const trend: Trend = {
+    const trend: Trend = { 
       id: 'tr-1',
       name: 'Test Trend',
       summary: 'summary',
@@ -108,9 +110,10 @@ describe('Trend repository', () => {
     const fetched = getTrends();
     expect(fetched).toHaveLength(1);
     expect(fetched[0].id).toBe('tr-1');
+
   });
   test('updates trend status', () => {
-    const trend: Trend = {
+    const trend: Trend = { 
       id: 'tr-2',
       name: 'Another Trend',
       summary: 'summary',
@@ -133,10 +136,11 @@ describe('Trend repository', () => {
     saveTrends([trend]);
     updateTrendStatus('tr-2', 'approved');
     const updated = getTrends().find((t) => t.id === 'tr-2');
+
     expect(updated?.status).toBe('approved');
   });
   test('patches trend fields', () => {
-    const trend: Trend = {
+    const trend: Trend = { 
       id: 'tr-3',
       name: 'Patch Trend',
       summary: 'summary',
@@ -191,14 +195,125 @@ describe('Evidence repository', () => {
       whatNeedsToBeTrue: [],
       leadingIndicators: [],
       monitoringQuestions: [],
+
       recommendedActions: [],
       createdAt: '2026-01-01',
       updatedAt: '2026-01-01',
     };
-    saveTrends([trend]);
+    saveTrends([trend]); 
     addEvidence(evidence);
     const result = getEvidenceForTrend('tr-4');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('ev-1');
+  });
+});
+
+// --- Phase 2 Monitoring Repository Tests ---
+
+import {
+  getMonitoringRules,
+  saveMonitoringRule,
+  updateMonitoringRule,
+  getMonitoringRuns,
+  saveMonitoringRun,
+  updateMonitoringRun,
+  getSourceSnapshots,
+  saveSourceSnapshot,
+  getChangeEvents,
+  saveChangeEvents,
+  getTrendScoreSnapshots,
+  saveTrendScoreSnapshot,
+  getTrendScoreChanges,
+  saveTrendScoreChange,
+  getAlerts,
+  saveAlerts,
+  acknowledgeAlert,
+  getWhatChangedSummaries,
+  saveWhatChangedSummary
+} from './mockRepository';
+import type { MonitoringRule, MonitoringRun, SourceSnapshot, ChangeEvent, TrendScoreSnapshot, TrendScoreChange, Alert, WhatChangedSummary } from './types'; 
+
+describe('Phase 2 Repository Functions', () => {
+  beforeEach(() => {
+    // Reset state before each test
+    globalThis.__mockRepoState = {
+      industryProfile: null,
+      sources: [],
+      documents: [],
+      signals: [],
+      trends: [],
+      evidences: [],
+      rules: [],
+      runs: [],
+      snapshots: [],
+      changeEvents: [],
+      trendScoreSnapshots: [],
+      trendScoreChanges: [],
+      alerts: [],
+      summaries: [],
+      strategicContext: null,
+      assumptions: [],
+      leadingIndicators: [],
+      strategicImplications: [],
+      scenarios: [],
+      strategicOptions: [],
+      decisionBriefs: [],
+      roadmapItems: [],
+    };
+  });
+
+  test('rules CRUD', () => {
+    const rule: MonitoringRule = { id: 'r1', sourceId: 's1', industryProfileId: 'ind', frequency: 'weekly', enabled: true, keywords: [], includePatterns: [], excludePatterns: [], createdAt: '', updatedAt: '' };
+    saveMonitoringRule(rule);
+    expect(getMonitoringRules().length).toBe(1);
+    updateMonitoringRule('r1', { enabled: false });
+    expect(getMonitoringRules()[0].enabled).toBe(false);
+  });
+
+  test('runs CRUD', () => {
+    const run: MonitoringRun = { id: 'run1', ruleId: 'r1', sourceId: 's1', startedAt: '', status: 'pending', documentsScanned: 0, newDocumentsFound: 0, updatedDocumentsFound: 0, newSignalsFound: 0, affectedTrendIds: [], alertIds: [] };
+    saveMonitoringRun(run);
+    expect(getMonitoringRuns().length).toBe(1);
+    updateMonitoringRun('run1', { status: 'completed' });
+    expect(getMonitoringRuns()[0].status).toBe('completed');
+  });
+
+  test('snapshots CRUD', () => {
+    const snap: SourceSnapshot = { id: 'snap1', sourceId: 's1', capturedAt: '', documentFingerprints: [], rawMetadata: {} };
+    saveSourceSnapshot(snap);
+    expect(getSourceSnapshots('s1').length).toBe(1);
+  });
+
+  test('change events CRUD', () => {
+    const event: ChangeEvent = { id: 'c1', sourceId: 's1', documentId: 'd1', changeType: 'new_document', detectedAt: '', currentSnapshotId: 'snap1', summary: '' };
+
+    saveChangeEvents([event]);
+    expect(getChangeEvents().length).toBe(1);
+  });
+
+  test('trend score snapshots CRUD', () => {
+    const snap: TrendScoreSnapshot = { id: 'ts1', trendId: 't1', capturedAt: '', likelihoodScore: 0, confidenceScore: 0, impactScore: 0, horizon: '', maturityStage: '', evidenceCount: 0, signalCount: 0, sourceDiversity: 0, reason: '' };
+    saveTrendScoreSnapshot(snap);
+    expect(getTrendScoreSnapshots('t1').length).toBe(1);
+  });
+
+  test('trend score changes CRUD', () => {
+    const change: TrendScoreChange = { id: 'tc1', trendId: 't1', previousSnapshotId: 'ts1', currentSnapshotId: 'ts2', changedAt: '', likelihoodDelta: 0, confidenceDelta: 0, impactDelta: 0, horizonChanged: false, maturityChanged: false, reason: '', relatedSignalIds: [] };
+    saveTrendScoreChange(change);
+    expect(getTrendScoreChanges('t1').length).toBe(1);
+  });
+
+  test('alerts CRUD', () => {
+    const alert: Alert = { id: 'a1', trendId: 't1', alertType: 'new_candidate_trend', severity: 'medium', title: '', summary: '', createdAt: '', acknowledged: false, relatedSignalIds: [], relatedDocumentIds: [], relatedSourceIds: [] } as any;
+    saveAlerts([alert]);
+    expect(getAlerts().length).toBe(1);
+    acknowledgeAlert('a1');
+    expect(getAlerts()[0].acknowledged).toBe(true);
+  });
+
+  test('what changed summaries CRUD', () => {
+    const summary: WhatChangedSummary = { id: 'wc1', monitoringRunId: 'run1', generatedAt: '', headline: '', newSignals: [], changedTrends: [], newCandidateTrends: [], alerts: [], recommendedActions: [] };
+    saveWhatChangedSummary(summary);
+    expect(getWhatChangedSummaries().length).toBe(1);
   });
 });

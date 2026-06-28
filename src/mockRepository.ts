@@ -1,8 +1,34 @@
+
 // Mock in‑memory repository for Phase 1 data
 // Provides deterministic CRUD operations used by tests and services.
 // Uses a global shared state object to ensure consistency across imports.
 
-import type { IndustryProfile, Source, Document, Signal, Trend, EvidenceLink, SourceStatus, TrendStatus } from './types';
+import type { 
+  IndustryProfile, 
+  Source, 
+  Document, 
+  Signal, 
+  Trend, 
+  EvidenceLink, 
+  SourceStatus,
+  TrendStatus,
+  MonitoringRule, 
+  MonitoringRun, 
+  SourceSnapshot, 
+  ChangeEvent, 
+  TrendScoreSnapshot, 
+  TrendScoreChange, 
+  Alert, 
+  WhatChangedSummary,
+  StrategicContext,
+  Assumption,
+  LeadingIndicator,
+  StrategicImplication,
+  Scenario,
+  StrategicOption,
+  DecisionBrief,
+  RoadmapItem,
+} from './types';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -13,6 +39,23 @@ declare global {
     signals: Signal[];
     trends: Trend[];
     evidences: EvidenceLink[];
+    rules: MonitoringRule[];
+    runs: MonitoringRun[];
+    snapshots: SourceSnapshot[];
+    changeEvents: ChangeEvent[];
+    trendScoreSnapshots: TrendScoreSnapshot[];
+    trendScoreChanges: TrendScoreChange[];
+    alerts: Alert[];
+    summaries: WhatChangedSummary[];
+    // Phase 3
+    strategicContext: StrategicContext | null;
+    assumptions: Assumption[];
+    leadingIndicators: LeadingIndicator[];
+    strategicImplications: StrategicImplication[];
+    scenarios: Scenario[];
+    strategicOptions: StrategicOption[];
+    decisionBriefs: DecisionBrief[];
+    roadmapItems: RoadmapItem[];
   } | undefined;
 }
 
@@ -25,6 +68,23 @@ function initState() {
       signals: [],
       trends: [],
       evidences: [],
+      rules: [],
+      runs: [],
+      snapshots: [],
+      changeEvents: [],
+      trendScoreSnapshots: [],
+      trendScoreChanges: [],
+      alerts: [],
+      summaries: [],
+      // Phase 3
+      strategicContext: null,
+      assumptions: [],
+      leadingIndicators: [],
+      strategicImplications: [],
+      scenarios: [],
+      strategicOptions: [],
+      decisionBriefs: [],
+      roadmapItems: [],
     };
   }
 }
@@ -326,4 +386,206 @@ export function addEvidence(e: EvidenceLink): void {
   }
 }
 
+// ==========================================
+// Phase 2: Monitoring Repository Operations
+// ==========================================
+
+export function getMonitoringRules(): MonitoringRule[] {
+  return [...globalThis.__mockRepoState!.rules];
+}
+
+export function saveMonitoringRule(rule: MonitoringRule): void {
+  const current = globalThis.__mockRepoState!.rules;
+  const idx = current.findIndex(r => r.id === rule.id);
+  if (idx !== -1) current[idx] = rule;
+  else current.push(rule);
+}
+
+export function updateMonitoringRule(ruleId: string, patch: Partial<MonitoringRule>): void {
+  const idx = globalThis.__mockRepoState!.rules.findIndex(r => r.id === ruleId);
+  if (idx !== -1) {
+    globalThis.__mockRepoState!.rules[idx] = { ...globalThis.__mockRepoState!.rules[idx], ...patch } as MonitoringRule;
+  }
+}
+
+export function getMonitoringRuns(): MonitoringRun[] {
+  return [...globalThis.__mockRepoState!.runs];
+}
+
+export function saveMonitoringRun(run: MonitoringRun): void {
+  const current = globalThis.__mockRepoState!.runs;
+  const idx = current.findIndex(r => r.id === run.id);
+  if (idx !== -1) current[idx] = run;
+  else current.push(run);
+}
+
+export function updateMonitoringRun(runId: string, patch: Partial<MonitoringRun>): void {
+  const idx = globalThis.__mockRepoState!.runs.findIndex(r => r.id === runId);
+  if (idx !== -1) {
+    globalThis.__mockRepoState!.runs[idx] = { ...globalThis.__mockRepoState!.runs[idx], ...patch } as MonitoringRun;
+  }
+}
+
+export function getSourceSnapshots(sourceId: string): SourceSnapshot[] {
+  return globalThis.__mockRepoState!.snapshots.filter(s => s.sourceId === sourceId);
+}
+
+export function saveSourceSnapshot(snapshot: SourceSnapshot): void {
+  const current = globalThis.__mockRepoState!.snapshots;
+  const idx = current.findIndex(s => s.id === snapshot.id);
+  if (idx !== -1) current[idx] = snapshot;
+  else current.push(snapshot);
+}
+
+export function getChangeEvents(): ChangeEvent[] {
+  return [...globalThis.__mockRepoState!.changeEvents];
+}
+
+export function saveChangeEvents(events: ChangeEvent[]): void {
+  globalThis.__mockRepoState!.changeEvents.push(...events);
+}
+
+export function getTrendScoreSnapshots(trendId: string): TrendScoreSnapshot[] {
+  return globalThis.__mockRepoState!.trendScoreSnapshots.filter(s => s.trendId === trendId);
+}
+
+export function saveTrendScoreSnapshot(snapshot: TrendScoreSnapshot): void {
+  const current = globalThis.__mockRepoState!.trendScoreSnapshots;
+  const idx = current.findIndex(s => s.id === snapshot.id);
+  if (idx !== -1) current[idx] = snapshot;
+  else current.push(snapshot);
+}
+
+export function getTrendScoreChanges(trendId: string): TrendScoreChange[] {
+  return globalThis.__mockRepoState!.trendScoreChanges.filter(c => c.trendId === trendId);
+}
+
+export function saveTrendScoreChange(change: TrendScoreChange): void {
+  const current = globalThis.__mockRepoState!.trendScoreChanges;
+  const idx = current.findIndex(c => c.id === change.id);
+  if (idx !== -1) current[idx] = change;
+  else current.push(change);
+}
+
+export function getAlerts(): Alert[] {
+  return [...globalThis.__mockRepoState!.alerts];
+}
+
+export function saveAlerts(alerts: Alert[]): void {
+  globalThis.__mockRepoState!.alerts.push(...alerts);
+}
+
+export function acknowledgeAlert(alertId: string): void {
+  const idx = globalThis.__mockRepoState!.alerts.findIndex(a => a.id === alertId);
+  if (idx !== -1) {
+    globalThis.__mockRepoState!.alerts[idx] = { ...globalThis.__mockRepoState!.alerts[idx], acknowledged: true };
+  }
+}
+
+export function getWhatChangedSummaries(): WhatChangedSummary[] {
+  return [...globalThis.__mockRepoState!.summaries];
+}
+
+export function saveWhatChangedSummary(summary: WhatChangedSummary): void {
+  const current = globalThis.__mockRepoState!.summaries;
+  const idx = current.findIndex(s => s.id === summary.id);
+  if (idx !== -1) current[idx] = summary;
+  else current.push(summary);
+}
+
 export type { SourceStatus, TrendStatus };
+
+// ==============================
+// Phase 3 Repository Functions
+// ==============================
+
+export function getStrategicContext(): StrategicContext | null {
+  return globalThis.__mockRepoState!.strategicContext;
+}
+
+export function saveStrategicContext(ctx: StrategicContext): void {
+  globalThis.__mockRepoState!.strategicContext = ctx;
+}
+
+export function getAssumptions(): Assumption[] {
+  return [...globalThis.__mockRepoState!.assumptions];
+}
+
+export function saveAssumptions(items: Assumption[]): void {
+  globalThis.__mockRepoState!.assumptions = [...globalThis.__mockRepoState!.assumptions, ...items];
+}
+
+export function updateAssumption(id: string, patch: Partial<Assumption>): void {
+  const list = globalThis.__mockRepoState!.assumptions;
+  const idx = list.findIndex(a => a.id === id);
+  if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+}
+
+export function getLeadingIndicators(): LeadingIndicator[] {
+  return [...globalThis.__mockRepoState!.leadingIndicators];
+}
+
+export function saveLeadingIndicators(items: LeadingIndicator[]): void {
+  globalThis.__mockRepoState!.leadingIndicators = [...globalThis.__mockRepoState!.leadingIndicators, ...items];
+}
+
+export function updateLeadingIndicator(id: string, patch: Partial<LeadingIndicator>): void {
+  const list = globalThis.__mockRepoState!.leadingIndicators;
+  const idx = list.findIndex(li => li.id === id);
+  if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+}
+
+export function getStrategicImplications(): StrategicImplication[] {
+  return [...globalThis.__mockRepoState!.strategicImplications];
+}
+
+export function saveStrategicImplications(items: StrategicImplication[]): void {
+  globalThis.__mockRepoState!.strategicImplications = [...globalThis.__mockRepoState!.strategicImplications, ...items];
+}
+
+export function getScenarios(): Scenario[] {
+  return [...globalThis.__mockRepoState!.scenarios];
+}
+
+export function saveScenarios(items: Scenario[]): void {
+  globalThis.__mockRepoState!.scenarios = [...globalThis.__mockRepoState!.scenarios, ...items];
+}
+
+export function getStrategicOptions(): StrategicOption[] {
+  return [...globalThis.__mockRepoState!.strategicOptions];
+}
+
+export function saveStrategicOptions(items: StrategicOption[]): void {
+  globalThis.__mockRepoState!.strategicOptions = [...globalThis.__mockRepoState!.strategicOptions, ...items];
+}
+
+export function updateStrategicOption(id: string, patch: Partial<StrategicOption>): void {
+  const list = globalThis.__mockRepoState!.strategicOptions;
+  const idx = list.findIndex(o => o.id === id);
+  if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+}
+
+export function getDecisionBriefs(): DecisionBrief[] {
+  return [...globalThis.__mockRepoState!.decisionBriefs];
+}
+
+export function saveDecisionBrief(brief: DecisionBrief): void {
+  const list = globalThis.__mockRepoState!.decisionBriefs;
+  const idx = list.findIndex(b => b.id === brief.id);
+  if (idx !== -1) list[idx] = brief;
+  else list.push(brief);
+}
+
+export function getRoadmapItems(): RoadmapItem[] {
+  return [...globalThis.__mockRepoState!.roadmapItems];
+}
+
+export function saveRoadmapItems(items: RoadmapItem[]): void {
+  globalThis.__mockRepoState!.roadmapItems = [...globalThis.__mockRepoState!.roadmapItems, ...items];
+}
+
+export function updateRoadmapItem(id: string, patch: Partial<RoadmapItem>): void {
+  const list = globalThis.__mockRepoState!.roadmapItems;
+  const idx = list.findIndex(r => r.id === id);
+  if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+}

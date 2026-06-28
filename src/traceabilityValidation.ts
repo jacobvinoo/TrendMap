@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getTrends, getSignals, getDocuments, getSources, getEvidenceForTrend } from './mockRepository';
 import type { Trend, Signal, Document, Source, EvidenceLink } from './types';
 

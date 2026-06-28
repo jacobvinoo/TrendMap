@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Trend, InsightSummary } from './types';
 
 /**

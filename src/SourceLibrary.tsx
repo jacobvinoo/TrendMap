@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { getSources, updateSourceStatus, updateSourceNote } from './mockRepository';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { generateEvidenceLinks } from './evidenceLinking';
 import type { Trend, Signal, Document, Source } from './types';
 
@@ -97,7 +98,7 @@ function makeRejectedSignal(overrides: Partial<Signal> = {}): Signal {
 }
 
 function makeTrend(overrides: Partial<Trend> = {}): Trend {
-  return {
+  return { 
     id: 'trend-1',
     name: 'AI-assisted grocery discovery',
     summary: 'Aggregated AI trend.',

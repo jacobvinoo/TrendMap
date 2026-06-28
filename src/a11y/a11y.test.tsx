@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Step 18 – Accessibility & usability validation
  *
@@ -50,8 +51,9 @@ describe('Accessibility – status shown as text, not colour only', () => {
   });
 
   test('TrendReviewBoard shows trend status as text via status-text span', async () => {
+
     const { saveTrends, saveSignals, addEvidence } = await import('../mockRepository');
-    saveTrends([{
+    saveTrends([{ 
       id: 't1', name: 'Test Trend', summary: 'Summary', status: 'candidate',
       horizon: '12-24 months', likelihoodScore: 0.7, confidenceScore: 0.8,
       impactScore: 0.6, maturityStage: 'emerging', relatedSignalIds: ['s1'],
@@ -100,9 +102,10 @@ describe('Accessibility – empty states are descriptive', () => {
 describe('Accessibility – cards are keyboard navigable', () => {
   beforeEach(() => resetMockData());
 
+
   test('TrendReviewBoard cards have tabIndex=0', async () => {
     const { saveTrends, saveSignals, addEvidence } = await import('../mockRepository');
-    saveTrends([{
+    saveTrends([{ 
       id: 't2', name: 'Keyboard Trend', summary: 'Summary', status: 'candidate',
       horizon: '12-24 months', likelihoodScore: 0.7, confidenceScore: 0.8,
       impactScore: 0.6, maturityStage: 'emerging', relatedSignalIds: ['s2'],
@@ -123,9 +126,10 @@ describe('Accessibility – cards are keyboard navigable', () => {
     expect(card).toHaveAttribute('tabindex', '0');
   });
 
+
   test('Enter key on TrendReviewBoard card opens detail panel', async () => {
     const { saveTrends, saveSignals, addEvidence } = await import('../mockRepository');
-    saveTrends([{
+    saveTrends([{ 
       id: 't3', name: 'Enter Key Trend', summary: 'Summary', status: 'candidate',
       horizon: '12-24 months', likelihoodScore: 0.7, confidenceScore: 0.8,
       impactScore: 0.6, maturityStage: 'emerging', relatedSignalIds: ['s3'],

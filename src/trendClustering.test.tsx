@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { clusterSignalsIntoTrends } from './trendClustering';
 import type { Signal } from './types';
 

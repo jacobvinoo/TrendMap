@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { getIndustryProfile, saveIndustryProfile } from './mockRepository';

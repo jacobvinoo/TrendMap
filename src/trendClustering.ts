@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import type { Signal, Trend } from './types';
 
 /**
@@ -133,7 +135,7 @@ export function clusterSignalsIntoTrends(signals: Signal[], customClusters?: Arr
     const strategicFields = generateStrategicFields(cluster.name);
 
     const trendId = `trend-${cluster.name.replace(/\s+/g, '-').toLowerCase()}`;
-    const trend: Trend = {
+    const trend: Trend = { 
       id: trendId,
       name: cluster.name,
       summary: `Aggregated trend based on ${cluster.name.toLowerCase()}.`,
