@@ -1,15 +1,11 @@
-// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { getSignals, getSources, getDocuments, saveTrends, addEvidence } from './mockRepository';
 import { clusterSignalsIntoTrends } from './trendClustering';
 import { generateEvidenceLinks } from './evidenceLinking';
+import { X, Filter, BarChart2, Calendar, FileText, Globe, ArrowRight } from 'lucide-react';
 
 import type { Signal, Source, Document } from './types';
 
-/**
- * SignalsScreen – displays extracted signals with filtering and detail view.
- * Implements the test expectations for rendering, filtering, and detail panel.
- */
 const SignalsScreen: React.FC = () => {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -18,15 +14,14 @@ const SignalsScreen: React.FC = () => {
   const [minConfidence, setMinConfidence] = useState<string>('');
   const [selected, setSelected] = useState<Signal | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Load data on mount – the mock repository returns deterministic data.
   useEffect(() => {
     setSignals(getSignals());
     setSources(getSources());
     setDocuments(getDocuments());
   }, []);
 
-  // Compute filtered list
   const filtered = signals.filter((s) => {
     if (pestleFilter && s.pestleCategory !== pestleFilter) return false;
     if (minConfidence) {
@@ -47,130 +42,244 @@ const SignalsScreen: React.FC = () => {
   };
 
   const handleGenerateTrends = () => {
-    // 1. Cluster current signals into new trends
-    const candidateTrends = clusterSignalsIntoTrends(signals);
-    if (candidateTrends.length === 0) {
-      setFeedbackMsg('No candidate trends could be generated from current signals.');
-      return;
-    }
+    setIsGenerating(true);
+    // Simulate slight processing delay for UX
+    setTimeout(() => {
+      const candidateTrends = clusterSignalsIntoTrends(signals);
+      if (candidateTrends.length === 0) {
+        setFeedbackMsg('No candidate trends could be generated from current signals.');
+        setIsGenerating(false);
+        return;
+      }
 
-    // 2. Generate evidence links for the new trends
-    const evidenceLinks = generateEvidenceLinks(candidateTrends, signals, documents, sources);
+      const evidenceLinks = generateEvidenceLinks(candidateTrends, signals, documents, sources);
+      const validTrends = candidateTrends.filter(t => 
+        evidenceLinks.some(e => e.trendId === t.id)
+      );
 
-    // 3. Filter out trends that have zero evidence (e.g., built entirely from non-approved sources)
-    const validTrends = candidateTrends.filter(t => 
-      evidenceLinks.some(e => e.trendId === t.id)
-    );
+      if (validTrends.length === 0) {
+        setFeedbackMsg('No candidate trends could be generated (insufficient approved evidence).');
+        setIsGenerating(false);
+        return;
+      }
 
-    if (validTrends.length === 0) {
-      setFeedbackMsg('No candidate trends could be generated (insufficient approved evidence).');
-      return;
-    }
+      saveTrends(validTrends);
+      evidenceLinks.forEach(link => addEvidence(link));
 
-    // 4. Save valid trends and their evidence to the repository
-    saveTrends(validTrends);
-    evidenceLinks.forEach(link => addEvidence(link));
-
-    // 5. Show visual feedback
-    setFeedbackMsg(`Successfully generated ${validTrends.length} candidate trend(s) and mapped ${evidenceLinks.length} evidence quotes. Ready for review on the Trends board.`);
-    
-    // Clear message after 5 seconds
-    setTimeout(() => setFeedbackMsg(''), 5000);
+      setFeedbackMsg(`Generated ${validTrends.length} candidate trend(s) mapped with ${evidenceLinks.length} quotes.`);
+      setIsGenerating(false);
+      setTimeout(() => setFeedbackMsg(''), 5000);
+    }, 600);
   };
 
+  const uniqueCategories = [...new Set(signals.map((s) => s.pestleCategory))].filter(Boolean);
+
   return (
-    <div style={{ padding: '2rem' }}>
-      <h2>Signals</h2>
-      
-      {/* Action Bar */}
-      <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button 
-          onClick={handleGenerateTrends}
-          style={{ padding: '0.75rem 1.5rem', background: '#5a5aff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-        >
-          Generate Candidate Trends
-        </button>
-        {feedbackMsg && <span style={{ color: '#a0ffa0', fontSize: '0.9rem' }}>{feedbackMsg}</span>}
-      </div>
-
-      {/* Filters */}
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem' }}>
-        <label>
-          PESTLE category
-          <select
-            aria-label="PESTLE category"
-            value={pestleFilter}
-            onChange={(e) => setPestleFilter(e.target.value)}
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Extracted Signals</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Review raw signals extracted from documents and cluster them into candidate trends.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          {feedbackMsg && (
+            <span className="text-green-400 bg-green-400/10 px-3 py-1.5 rounded-full text-sm font-medium animate-in fade-in slide-in-from-right-4">
+              {feedbackMsg}
+            </span>
+          )}
+          <button 
+            onClick={handleGenerateTrends}
+            disabled={isGenerating || signals.length === 0}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-2"
           >
-            <option value="">All</option>
-            {/* Dynamically list unique categories */}
-            {[...new Set(signals.map((s) => s.pestleCategory))].map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Min confidence
-          <input
-            aria-label="Min confidence"
-            type="number"
-            step="0.01"
-            min="0"
-            max="1"
-            placeholder="0-1"
-            value={minConfidence}
-            onChange={(e) => setMinConfidence(e.target.value)}
-          />
-        </label>
+            {isGenerating ? 'Clustering...' : 'Generate Candidate Trends'}
+          </button>
+          <a href="#trends" className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-2">
+            Next: Trends <ArrowRight size={16} />
+          </a>
+        </div>
       </div>
 
+      {/* Filters Bar */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+        <div className="flex items-center gap-2 text-gray-400 font-medium text-sm mr-4">
+          <Filter size={16} /> Filters
+        </div>
+        
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <select
+              aria-label="PESTLE category"
+              value={pestleFilter}
+              onChange={(e) => setPestleFilter(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none"
+            >
+              <option value="">All Categories</option>
+              {uniqueCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <input
+              aria-label="Min confidence"
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              placeholder="Min Confidence (0-1)"
+              value={minConfidence}
+              onChange={(e) => setMinConfidence(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+        </div>
+        
+        <div className="text-sm text-gray-500 ml-auto whitespace-nowrap">
+          Showing {filtered.length} of {signals.length} signals
+        </div>
+      </div>
+
+      {/* Signals Grid */}
       {filtered.length === 0 ? (
-        <p>No signals extracted yet.</p>
+        <div className="text-center py-20 border border-dashed border-gray-700 rounded-xl bg-gray-800/50">
+          <p className="text-gray-400">No signals extracted yet.</p>
+        </div>
       ) : (
-        <div style={{ display: 'grid', gap: '1rem' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filtered.map((s) => (
             <div
               key={s.id}
               data-testid="signal-card"
-              style={{ border: '1px solid #ddd', padding: '1rem', cursor: 'pointer' }}
               onClick={() => setSelected(s)}
+              className="bg-gray-800 border border-gray-700 hover:border-indigo-500/50 hover:bg-gray-800/80 rounded-xl p-5 cursor-pointer transition-all flex flex-col group"
             >
-              <h3>{s.title}</h3>
-              <p>{s.summary}</p>
-              <p>Novelty: {s.noveltyScore}</p>
-              <p>Strength: {s.strengthScore}</p>
-              <p>Confidence: {s.confidenceScore}</p>
-              <p>Evidence date: {s.evidenceDate}</p>
-              <p>Source: {getSourceName(s.sourceId)}</p>
+              <div className="flex justify-between items-start gap-3 mb-3">
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-800/50 capitalize">
+                  {s.pestleCategory}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-gray-500 font-medium">
+                  <BarChart2 size={12} /> {Math.round(s.confidenceScore * 100)}%
+                </span>
+              </div>
+              
+              <h3 className="text-base font-semibold text-white mb-2 leading-tight group-hover:text-indigo-200 transition-colors">
+                {s.title}
+              </h3>
+              
+              <p className="text-sm text-gray-400 line-clamp-3 mb-4 flex-1">
+                {s.summary}
+              </p>
+              
+              <div className="pt-3 border-t border-gray-700/50 flex flex-col gap-1.5 mt-auto">
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span className="flex items-center gap-1.5 truncate max-w-[70%]">
+                    <Globe size={12} className="flex-shrink-0" />
+                    <span className="truncate">{getSourceName(s.sourceId)}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 flex-shrink-0">
+                    <Calendar size={12} />
+                    {new Date(s.evidenceDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Detail panel */}
+      {/* Detail Modal Overlay */}
       {selected && (
-        <div
-          data-testid="signal-detail-panel"
-          style={{
-            position: 'fixed',
-            top: '20%',
-            left: '20%',
-            right: '20%',
-            background: 'white',
-            border: '2px solid #444',
-            padding: '1rem',
-            zIndex: 1000,
-          }}
-        >
-          <h3>{selected.title}</h3>
-          <p>{selected.summary}</p>
-          <p>Source: {getSourceName(selected.sourceId)}</p>
-          <p>Document: {getDocumentTitle(selected.documentId)}</p>
-          <button type="button" aria-label="Close" onClick={() => setSelected(null)}>
-            Close
-          </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div 
+            data-testid="signal-detail-panel"
+            className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-gray-900/50">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-800/50 capitalize">
+                  {selected.pestleCategory}
+                </span>
+                <span className="text-sm text-gray-400 font-medium">Signal Details</span>
+              </div>
+              <button 
+                type="button" 
+                aria-label="Close" 
+                onClick={() => setSelected(null)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto">
+              <h3 className="text-xl font-bold text-white mb-4 leading-snug">
+                {selected.title}
+              </h3>
+              
+              <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 mb-6">
+                <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                  {selected.summary}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Novelty</div>
+                  <div className="text-lg font-medium text-white">{Math.round(selected.noveltyScore * 100)}%</div>
+                </div>
+                <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Strength</div>
+                  <div className="text-lg font-medium text-white">{Math.round(selected.strengthScore * 100)}%</div>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-gray-800">
+                <div className="flex items-start gap-3">
+                  <Globe size={16} className="text-gray-500 mt-0.5" />
+                  <div>
+                    <div className="text-xs text-gray-500 font-medium">Source</div>
+                    <div className="text-sm text-gray-200">{getSourceName(selected.sourceId)}</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FileText size={16} className="text-gray-500 mt-0.5" />
+                  <div>
+                    <div className="text-xs text-gray-500 font-medium">Origin Document</div>
+                    <div className="text-sm text-gray-200">{getDocumentTitle(selected.documentId)}</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Calendar size={16} className="text-gray-500 mt-0.5" />
+                  <div>
+                    <div className="text-xs text-gray-500 font-medium">Evidence Date</div>
+                    <div className="text-sm text-gray-200">
+                      {new Date(selected.evidenceDate).toLocaleDateString(undefined, { 
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="p-5 border-t border-gray-800 bg-gray-900/50 flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => setSelected(null)}
+                className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

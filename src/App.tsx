@@ -1,22 +1,5 @@
-// @ts-nocheck
-/**
- * App.tsx – TrendMap Phase 1 shell
- *
- * Implements hash-based tab routing so each of the five Phase 1 screens
- * is reachable from the persistent navigation bar.
- *
- * Hash map:
- *   #setup     → IndustrySetup
- *   #sources   → SourceLibrary
- *   #signals   → SignalsScreen
- *   #trends    → TrendReviewBoard
- *   #insights  → InsightsScreen
- *   (empty)    → defaults to #setup
- *
- * The /debug/traceability panel is still available in DEV mode via
- *   #debug-traceability
- */
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { Menu, X, Compass, Activity, Target } from 'lucide-react';
 import './App.css';
 import IndustrySetup from './IndustrySetup';
 import SourceLibrary from './SourceLibrary';
@@ -47,13 +30,15 @@ const LazyTraceabilityPanel = import.meta.env.DEV
   : null;
 
 type Tab = 'setup' | 'sources' | 'documents' | 'signals' | 'trends' | 'insights'
-  | 'monitoring' | 'alerts'
+  | 'dashboard' | 'rules' | 'alerts'
   | 'strategy' | 'assumptions' | 'indicators' | 'implications' | 'scenarios' | 'options' | 'brief' | 'roadmap'
   | 'debug-traceability';
 
-const TAB_GROUPS = [
+const PHASES = [
   {
-    title: 'Phase 1: Discovery',
+    id: 'p1',
+    title: 'Phase 1: Discover',
+    icon: Compass,
     tabs: [
       { id: 'setup',    label: 'Industry Setup' },
       { id: 'sources',  label: 'Sources' },
@@ -64,14 +49,19 @@ const TAB_GROUPS = [
     ]
   },
   {
-    title: 'Phase 2: Monitoring',
+    id: 'p2',
+    title: 'Phase 2: Monitor',
+    icon: Activity,
     tabs: [
-      { id: 'monitoring', label: 'Dashboard' },
-      { id: 'alerts',   label: 'Alerts' },
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'rules',     label: 'Rules Engine' },
+      { id: 'alerts',    label: 'Alerts' },
     ]
   },
   {
-    title: 'Phase 3: Strategy',
+    id: 'p3',
+    title: 'Phase 3: Strategize',
+    icon: Target,
     tabs: [
       { id: 'strategy',    label: 'Strategy Context' },
       { id: 'assumptions', label: 'Assumptions' },
@@ -85,11 +75,13 @@ const TAB_GROUPS = [
   }
 ];
 
-const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
+const ALL_TABS = PHASES.flatMap(p => p.tabs);
 
 function getTabFromHash(hash: string): Tab {
   const clean = hash.replace('#', '') as Tab;
   if (clean === 'debug-traceability') return clean;
+  // Map old 'monitoring' route to 'dashboard' to avoid breaking old links
+  if (clean === 'monitoring' as any) return 'dashboard';
   return ALL_TABS.some((t) => t.id === clean) ? clean : 'setup';
 }
 
@@ -97,6 +89,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>(() =>
     getTabFromHash(typeof window !== 'undefined' ? window.location.hash : '')
   );
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Keep tab state in sync with browser back/forward navigation
   useEffect(() => {
@@ -108,123 +101,153 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Debug traceability route (dev only)
-  if (activeTab === ('debug-traceability' as Tab) && LazyTraceabilityPanel) {
-    return (
-      <Suspense fallback={<p>Loading traceability panel…</p>}>
-        <LazyTraceabilityPanel />
-      </Suspense>
-    );
-  }
-
   const handleTabClick = (tab: Tab) => {
     window.location.hash = tab;
     setActiveTab(tab);
+    setIsSidebarOpen(false);
   };
 
+  const activePhase = PHASES.find(p => p.tabs.some(t => t.id === activeTab));
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'row', background: '#0f0f1a', color: '#e0e0ff', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="h-screen flex flex-col md:flex-row bg-[#0f0f1a] text-[#e0e0ff] font-sans overflow-hidden">
+      {/* ── Mobile Header ──────────────────────────────────────── */}
+      <div className="md:hidden flex items-center justify-between p-4 bg-[#13132b] border-b border-[#2a2a4a] flex-shrink-0 z-40">
+        <span className="font-bold text-xl text-[#a0a0ff]">TrendMap</span>
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="p-2 -mr-2 text-gray-400 hover:text-white rounded-md"
+          aria-label="Open navigation menu"
+        >
+          <Menu size={24} />
+        </button>
+      </div>
+
+      {/* ── Mobile Sidebar Overlay ───────────────────────────────── */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 md:hidden" 
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ── Sidebar Navigation ──────────────────────────────────────── */}
       <nav
         aria-label="Main navigation"
-        style={{
-          width: '260px',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#13132b',
-          borderRight: '1px solid #2a2a4a',
-          overflowY: 'auto',
-          flexShrink: 0,
-        }}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#13132b] border-r border-[#2a2a4a] flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 flex-shrink-0
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
       >
-        {/* Logo / brand */}
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #2a2a4a', marginBottom: '1rem' }}>
-          <span style={{ fontWeight: 700, fontSize: '1.25rem', color: '#a0a0ff' }}>
+        {/* Logo / brand / mobile close */}
+        <div className="flex items-center justify-between p-5 border-b border-[#2a2a4a] mb-6">
+          <span className="font-bold text-xl text-[#a0a0ff]">
             TrendMap
           </span>
+          <button 
+            className="md:hidden text-gray-400 hover:text-white p-1"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        <div style={{ padding: '0 1rem 1rem' }}>
-          {TAB_GROUPS.map((group, gIdx) => (
-            <div key={gIdx} style={{ marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', paddingLeft: '0.75rem' }}>
-                {group.title}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                {group.tabs.map(tab => (
-                  <a
-                    key={tab.id}
-                    href={`#${tab.id}`}
-                    onClick={(e) => { e.preventDefault(); handleTabClick(tab.id as Tab); }}
-                    aria-current={activeTab === tab.id ? 'page' : undefined}
-                    style={{
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: '0.375rem',
-                      color: activeTab === tab.id ? '#fff' : '#888',
-                      background: activeTab === tab.id ? '#2a2a4a' : 'transparent',
-                      textDecoration: 'none',
-                      fontSize: '0.875rem',
-                      fontWeight: activeTab === tab.id ? 500 : 400,
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {tab.label}
-                  </a>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3">
+            Workflow
+          </div>
+          {PHASES.map((phase) => {
+            const isActive = phase.id === activePhase?.id;
+            const Icon = phase.icon;
+            return (
+              <button
+                key={phase.id}
+                onClick={() => handleTabClick(phase.tabs[0].id as Tab)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-medium ${
+                  isActive 
+                    ? 'bg-purple-600/20 text-purple-400' 
+                    : 'text-gray-400 hover:bg-[#1a1a3a] hover:text-gray-200'
+                }`}
+              >
+                <Icon size={18} />
+                <span>{phase.title}</span>
+              </button>
+            );
+          })}
 
           {/* Dev-only traceability link */}
           {import.meta.env.DEV && (
-            <div style={{ marginTop: '2rem', borderTop: '1px solid #2a2a4a', paddingTop: '1rem' }}>
-              <a
-                href="#debug-traceability"
-                onClick={(e) => { e.preventDefault(); handleTabClick('debug-traceability' as Tab); }}
-                style={{
-                  display: 'block',
-                  padding: '0.5rem 0.75rem',
-                  borderRadius: '0.375rem',
-                  color: activeTab === 'debug-traceability' ? '#fff' : '#5a5aff',
-                  background: activeTab === 'debug-traceability' ? '#2a2a4a' : 'transparent',
-                  textDecoration: 'none',
-                  fontSize: '0.875rem',
-                }}
+            <div className="mt-8 pt-6 border-t border-[#2a2a4a]">
+              <button
+                onClick={() => handleTabClick('debug-traceability' as Tab)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-medium ${
+                  activeTab === 'debug-traceability'
+                    ? 'bg-[#2a2a4a] text-white'
+                    : 'text-[#5a5aff] hover:bg-[#1a1a3a]'
+                }`}
               >
-                🔍 Traceability
-              </a>
+                <span>🔍 Traceability</span>
+              </button>
             </div>
           )}
         </div>
       </nav>
 
-      {/* ── Screen content ─────────────────────────────────────── */}
-      <main style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        {activeTab === 'setup'    && <IndustrySetup />}
-        {activeTab === 'sources'  && <SourceLibrary />}
-        {activeTab === 'documents'&& <DocumentIntake />}
-        {activeTab === 'signals'  && <SignalsScreen />}
-        {activeTab === 'trends'   && <TrendReviewBoard />}
-        {activeTab === 'insights' && <InsightsScreen />}
-        {activeTab === 'monitoring' && (
-          <div className="flex flex-col gap-8">
-            <MonitoringDashboard />
-            <div className="border-t border-gray-800 pt-8 mt-4">
-              <MonitoringScreen />
+      {/* ── Main Content Area ─────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#0f0f1a] relative z-0">
+        
+        {/* Secondary Tab Bar (Sub-navigation) */}
+        {activeTab !== 'debug-traceability' && activePhase && (
+          <div className="bg-[#13132b] border-b border-[#2a2a4a] px-4 md:px-8 overflow-x-auto flex-shrink-0">
+            <div className="flex items-center gap-6 min-w-max">
+              {activePhase.tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab.id as Tab)}
+                  className={`whitespace-nowrap py-4 font-medium text-sm transition-colors border-b-2 ${
+                    activeTab === tab.id 
+                      ? 'border-purple-500 text-white' 
+                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
         )}
-        {activeTab === 'alerts'   && <AlertsScreen />}
-        {/* Phase 3 screens */}
-        {activeTab === 'strategy'     && <StrategyScreen />}
-        {activeTab === 'assumptions'  && <AssumptionsScreen />}
-        {activeTab === 'indicators'   && <AssumptionMonitorPanel />}
-        {activeTab === 'implications' && <ImplicationsScreen />}
-        {activeTab === 'scenarios'    && <ScenariosScreen />}
-        {activeTab === 'options'      && <StrategicOptionsScreen />}
-        {activeTab === 'brief'        && <DecisionBriefScreen />}
-        {activeTab === 'roadmap'      && <RoadmapScreen />}
-      </main>
+
+        {/* Screen Container */}
+        <main className="flex-1 overflow-y-auto">
+          {activeTab === 'setup'    && <IndustrySetup />}
+          {activeTab === 'sources'  && <SourceLibrary />}
+          {activeTab === 'documents'&& <DocumentIntake />}
+          {activeTab === 'signals'  && <SignalsScreen />}
+          {activeTab === 'trends'   && <TrendReviewBoard />}
+          {activeTab === 'insights' && <InsightsScreen />}
+          
+          {/* Phase 2 screens */}
+          {activeTab === 'dashboard' && <MonitoringDashboard />}
+          {activeTab === 'rules' && <MonitoringScreen />}
+          {activeTab === 'alerts'   && <AlertsScreen />}
+          
+          {/* Phase 3 screens */}
+          {activeTab === 'strategy'     && <StrategyScreen />}
+          {activeTab === 'assumptions'  && <AssumptionsScreen />}
+          {activeTab === 'indicators'   && <AssumptionMonitorPanel />}
+          {activeTab === 'implications' && <ImplicationsScreen />}
+          {activeTab === 'scenarios'    && <ScenariosScreen />}
+          {activeTab === 'options'      && <StrategicOptionsScreen />}
+          {activeTab === 'brief'        && <DecisionBriefScreen />}
+          {activeTab === 'roadmap'      && <RoadmapScreen />}
+          {activeTab === 'debug-traceability' && LazyTraceabilityPanel && (
+            <Suspense fallback={<p className="p-6 text-gray-400">Loading traceability panel...</p>}>
+              <LazyTraceabilityPanel />
+            </Suspense>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import SourceLibrary from './SourceLibrary';
 import { resetMockData, getSources } from './mockRepository';
 
@@ -19,20 +18,27 @@ describe('SourceLibrary component', () => {
 
   it('approves a source and changes status', () => {
     render(<SourceLibrary />);
-    const approveBtn = screen.getAllByRole('button', { name: /approve/i })[0];
+    const source = getSources()[0];
+    const sourceCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    const approveBtn = within(sourceCard).getByRole('button', { name: /approve/i });
+    
     fireEvent.click(approveBtn);
-    // After approval, status text in the first card changes to 'approved'
-    const cards = screen.getAllByTestId('source-card');
-    expect(cards[0]).toHaveTextContent('approved');
+    
+    // Find the card again as it might have moved to the "Reviewed" section
+    const updatedCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    expect(updatedCard).toHaveTextContent(/approved/i);
   });
 
   it('rejects a source and changes status', () => {
     render(<SourceLibrary />);
-    const rejectBtn = screen.getAllByRole('button', { name: /reject/i })[0];
+    const source = getSources()[0];
+    const sourceCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    const rejectBtn = within(sourceCard).getByRole('button', { name: /reject/i });
+    
     fireEvent.click(rejectBtn);
-    // After rejection, status text in the first card changes to 'rejected'
-    const cards = screen.getAllByTestId('source-card');
-    expect(cards[0]).toHaveTextContent('rejected');
+    
+    const updatedCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    expect(updatedCard).toHaveTextContent(/rejected/i);
   });
 
   it('displays scores as percentages', () => {
@@ -46,19 +52,26 @@ describe('SourceLibrary component', () => {
   it('allows adding a note to a source', () => {
     render(<SourceLibrary />);
     const source = getSources()[0];
-    const noteInput = screen.getAllByPlaceholderText('Add note')[0];
-    const addBtn = screen.getAllByRole('button', { name: /add note/i })[0];
+    const sourceCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    
+    const noteInput = within(sourceCard).getByPlaceholderText('Add review note...');
+    const addBtn = within(sourceCard).getByRole('button', { name: /add note/i });
+    
     fireEvent.change(noteInput, { target: { value: 'Important source' } });
     fireEvent.click(addBtn);
+    
     expect(screen.getByTestId(`note-text-${source.id}`)).toHaveTextContent('Important source');
   });
 
   it('visually distinguishes rejected sources', () => {
     render(<SourceLibrary />);
-    const rejectBtn = screen.getAllByRole('button', { name: /reject/i })[0];
+    const source = getSources()[0];
+    const sourceCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    const rejectBtn = within(sourceCard).getByRole('button', { name: /reject/i });
+    
     fireEvent.click(rejectBtn);
-    const rejectedCard = screen.getAllByTestId('source-card')[0];
-    // assuming rejected cards have class 'rejected'
-    expect(rejectedCard).toHaveClass('rejected');
+    
+    const updatedCard = screen.getByText(source.name).closest('[data-testid="source-card"]') as HTMLElement;
+    expect(updatedCard.className).toContain('border-red-900');
   });
 });
