@@ -3,10 +3,8 @@
  * Strategic Roadmap View — displays roadmap items in a Now / Next / Later horizon layout.
  * Users can generate roadmap items from accepted strategic options and update their status.
  */
-import React, { useState } from 'react';
-import {
-  getRoadmapItems, saveRoadmapItems, updateRoadmapItem, getStrategicOptions,
-} from './mockRepository';
+import React, { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateRoadmapItems } from './roadmapEngine';
 import type { RoadmapItem, RoadmapHorizon, RoadmapStatus } from './types';
 import { Zap, Calendar, Telescope, DollarSign, FlaskConical, Users, Eye, Shield, LogOut, Wrench } from 'lucide-react';
@@ -37,26 +35,48 @@ const OPTION_TYPE_ICONS: Record<string, React.ReactNode> = {
 };
 
 export default function RoadmapScreen() {
-  const [items, setItems] = useState<RoadmapItem[]>(() => getRoadmapItems());
-  const options = getStrategicOptions();
+  const [items, setItems] = useState<RoadmapItem[]>([]);
+  const [options, setOptions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const [fetchedItems, fetchedOptions] = await Promise.all([
+        repository.getRoadmapItems(),
+        repository.getStrategicOptions()
+      ]);
+      setItems(fetchedItems);
+      setOptions(fetchedOptions);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const optionMap = Object.fromEntries(options.map(o => [o.id, o]));
 
-  const refresh = () => setItems(getRoadmapItems());
-
-  const handleGenerate = () => {
-    const accepted = options.filter(o => o.status === 'accepted' || !o.status);
-    const generated = generateRoadmapItems(accepted.length > 0 ? accepted : options);
-    saveRoadmapItems(generated);
-    refresh();
+  const refresh = async () => {
+    await loadData();
   };
 
-  const handleStatusChange = (id: string, status: RoadmapStatus) => {
-    updateRoadmapItem(id, { status });
-    refresh();
+  const handleGenerate = async () => {
+    const accepted = options.filter(o => o.status === 'accepted' || !o.status);
+    const generated = generateRoadmapItems(accepted.length > 0 ? accepted : options);
+    await repository.saveRoadmapItems(generated);
+    await refresh();
+  };
+
+  const handleStatusChange = async (id: string, status: RoadmapStatus) => {
+    await repository.updateRoadmapItem(id, { status });
+    await refresh();
   };
 
   const byHorizon = (h: RoadmapHorizon) => items.filter(r => r.horizon === h);
+
+  if (loading) return <div className="p-8">Loading roadmap...</div>;
 
   return (
     <div className="p-8 max-w-7xl mx-auto">

@@ -2,11 +2,8 @@
  * ScenariosScreen (Step 12)
  * Shows all generated scenarios by type with probability/impact.
  */
-import { useState } from 'react';
-import {
-  getScenarios, saveScenarios,
-  getStrategicImplications, getAssumptions, getLeadingIndicators, getStrategicContext,
-} from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateScenarios } from './scenarioEngine';
 import type { Scenario, ScenarioType } from './types';
 
@@ -18,20 +15,40 @@ const SCENARIO_CONFIG: Record<ScenarioType, { label: string; color: string; icon
 };
 
 export default function ScenariosScreen() {
-  const [scenarios, setScenarios] = useState<Scenario[]>(() => getScenarios());
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setScenarios(getScenarios());
-
-  const handleGenerate = () => {
-    const ctx = getStrategicContext();
-    if (!ctx) return;
-    const implications = getStrategicImplications();
-    const assumptions = getAssumptions();
-    const indicators = getLeadingIndicators();
-    const generated = generateScenarios(implications, assumptions, indicators, ctx);
-    saveScenarios(generated);
-    refresh();
+  const loadData = async () => {
+    try {
+      const fetched = await repository.getScenarios();
+      setScenarios(fetched);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refresh = async () => {
+    await loadData();
+  };
+
+  const handleGenerate = async () => {
+    const ctx = await repository.getStrategicContext();
+    if (!ctx) return;
+    const [implications, assumptions, indicators] = await Promise.all([
+      repository.getStrategicImplications(),
+      repository.getAssumptions(),
+      repository.getLeadingIndicators()
+    ]);
+    const generated = generateScenarios(implications, assumptions, indicators, ctx);
+    await repository.saveScenarios(generated);
+    await refresh();
+  };
+
+  if (loading) return <div className="p-8">Loading scenarios...</div>;
 
   const ORDER: ScenarioType[] = ['upside', 'base_case', 'downside', 'wildcard'];
   const sorted = [...scenarios].sort((a, b) =>

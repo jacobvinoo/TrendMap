@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { getTrends, getSignals, getDocuments, getSources, getEvidenceForTrend } from './mockRepository';
+import { repository } from './repository';
 import type { Trend, Signal, Document, Source, EvidenceLink } from './types';
 
 export interface TraceabilityReportItem {
@@ -9,21 +9,22 @@ export interface TraceabilityReportItem {
 }
 
 /**
- * Walks the in‑memory repository and returns an array of any broken links.
+ * Walks the repository and returns an array of any broken links.
  * Returns an empty array when the traceability chain is healthy.
  */
-export const validateTraceability = (): TraceabilityReportItem[] => {
+export const validateTraceability = async (): Promise<TraceabilityReportItem[]> => {
   const report: TraceabilityReportItem[] = [];
 
-  const trends = getTrends();
-  const signals = getSignals();
-  const documents = getDocuments();
-  const sources = getSources();
-  // Gather all evidences (could be fetched per trend, but we need global list)
+  const trends = await repository.getTrends();
+  const signals = await repository.getSignals();
+  const documents = await repository.getDocuments();
+  const sources = await repository.getSources();
+  // Gather all evidences
   const evidences: EvidenceLink[] = [];
-  trends.forEach((t) => {
-    evidences.push(...getEvidenceForTrend(t.id));
-  });
+  await Promise.all(trends.map(async (t) => {
+    const trendEvidences = await repository.getEvidenceForTrend(t.id);
+    evidences.push(...trendEvidences);
+  }));
 
   const signalMap = new Map<string, Signal>(signals.map((s) => [s.id, s]));
   const docMap = new Map<string, Document>(documents.map((d) => [d.id, d]));

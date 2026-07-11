@@ -19,43 +19,47 @@ test.describe('Edit trend E2E flow', () => {
   });
 
   test('renders app and navigation links', async ({ page }) => {
-    await expect(page.getByRole('link', { name: 'Setup' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Sources' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Documents' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Signals' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Trends' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Insights' })).toBeVisible();
+    // Assert the API fallback banner is NOT visible
+    await expect(page.locator('text=Database API is not connected')).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Industry Setup', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sources', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Documents', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Signals', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Trends', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Insights', exact: true })).toBeVisible();
   });
 
   test('app root renders the main page content', async ({ page }) => {
     await expect(page.getByRole('navigation', { name: /main navigation/i })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('heading', { level: 2, name: /industry setup/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /industry setup/i })).toBeVisible();
   });
 
   test('full workflow: extract signals -> generate trends -> edit trend via inline form', async ({ page }) => {
     // 1. Navigate to Documents
-    await page.getByRole('link', { name: 'Documents' }).click();
+    await page.getByRole('button', { name: 'Documents', exact: true }).click();
 
     // Show all sources toggle just in case
-    await page.getByLabel('show-all-toggle').check();
+    const toggle = page.getByLabel('show-all-toggle');
+    if (await toggle.isChecked() === false) {
+      await toggle.click({ force: true });
+    }
 
-    // Click extract signals on the first document
-    const extractBtn = page.getByRole('button', { name: /extract signals from/i }).first();
+    // Click extract signals on the newly seeded document that hasn't been extracted yet
+    const extractBtn = page.getByRole('button', { name: /extract signals from New Mock Signal/i });
     await extractBtn.click();
     await expect(extractBtn).toHaveText('Extracted', { timeout: 5000 });
 
     // 2. Navigate to Signals
-    await page.getByRole('link', { name: 'Signals' }).click();
+    await page.getByRole('button', { name: 'Signals', exact: true }).click();
 
     // Generate Trends
     const generateBtn = page.getByRole('button', { name: 'Generate Candidate Trends' });
     await generateBtn.click();
-    
     // Look for success feedback
-    await expect(page.getByText(/Successfully generated/)).toBeVisible();
+    await expect(page.getByText(/Generated \d+ candidate trend/)).toBeVisible();
 
     // 3. Navigate to Trends
-    await page.getByRole('link', { name: 'Trends' }).click();
+    await page.getByRole('button', { name: 'Trends', exact: true }).click();
 
     // Wait for the specific trend card generated from the AI signal
     const trendCard = page.getByTestId('trend-card').filter({ hasText: 'AI-assisted grocery discovery' });
@@ -90,7 +94,7 @@ test.describe('Accessibility – Playwright checks', () => {
     await page.keyboard.press('Tab');
     const focused = page.locator(':focus');
     const tagName = await focused.evaluate((el) => el.tagName.toLowerCase());
-    expect(tagName).toBe('a');
+    expect(tagName).toBe('button');
   });
 
   test('no obviously broken focusable elements (all have accessible names)', async ({ page }) => {

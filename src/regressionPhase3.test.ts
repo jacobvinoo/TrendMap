@@ -1,3 +1,4 @@
+import { seedTestData } from "./testSeed";
 import { describe, it, expect, beforeEach } from 'vitest';
 import { runMonitoringRule } from './monitoringRun';
 import { resetMockData, getTrends, saveTrends, getAlerts, saveAlerts, getSources, saveMonitoringRule, getMonitoringRuns, saveIndustryProfile } from './mockRepository';
@@ -29,6 +30,9 @@ describe('Phase 1 and 2 Regression Suite', () => {
       strategicOptions: [],
       decisionBriefs: [],
       roadmapItems: [],
+      
+      
+      knowledgeGraph: { nodes: [], edges: [] },
     };
   });
 
@@ -82,6 +86,7 @@ describe('Phase 1 and 2 Regression Suite', () => {
   it('ensures rejected sources are present and identifiable as rejected', () => {
     // resetMockData() re-seeds all default data synchronously, giving us the rejected source
     resetMockData();
+    seedTestData();
     const allSources = getSources();
     const rejected = allSources.filter((s: Source) => s.status === 'rejected');
     const approved = allSources.filter((s: Source) => s.status === 'approved');

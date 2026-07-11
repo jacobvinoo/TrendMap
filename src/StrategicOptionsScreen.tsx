@@ -2,11 +2,8 @@
  * StrategicOptionsScreen (Step 15)
  * Shows prioritised strategic options with scores, next steps and effort.
  */
-import { useState } from 'react';
-import {
-  getStrategicOptions, saveStrategicOptions, updateStrategicOption,
-  getStrategicImplications, getScenarios, getAssumptions, getStrategicContext,
-} from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateStrategicOptions } from './optionEngine';
 import type { StrategicOption, OptionType } from './types';
 
@@ -37,25 +34,45 @@ const TIME_LABELS: Record<string, string> = {
 const STATUS_OPTIONS = ['proposed', 'accepted', 'rejected', 'in_progress'] as const;
 
 export default function StrategicOptionsScreen() {
-  const [options, setOptions] = useState<StrategicOption[]>(() => getStrategicOptions());
+  const [options, setOptions] = useState<StrategicOption[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setOptions(getStrategicOptions());
+  const loadData = async () => {
+    try {
+      const fetched = await repository.getStrategicOptions();
+      setOptions(fetched);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleGenerate = () => {
-    const ctx = getStrategicContext();
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refresh = async () => {
+    await loadData();
+  };
+
+  const handleGenerate = async () => {
+    const ctx = await repository.getStrategicContext();
     if (!ctx) return;
-    const implications = getStrategicImplications();
-    const scenarios = getScenarios();
-    const assumptions = getAssumptions();
+    const [implications, scenarios, assumptions] = await Promise.all([
+      repository.getStrategicImplications(),
+      repository.getScenarios(),
+      repository.getAssumptions()
+    ]);
     const generated = generateStrategicOptions(implications, scenarios, assumptions, ctx);
-    saveStrategicOptions(generated);
-    refresh();
+    await repository.saveStrategicOptions(generated);
+    await refresh();
   };
 
-  const handleStatusChange = (id: string, status: string) => {
-    updateStrategicOption(id, { status: status as StrategicOption['status'] });
-    refresh();
+  const handleStatusChange = async (id: string, status: string) => {
+    await repository.updateStrategicOption(id, { status: status as StrategicOption['status'] });
+    await refresh();
   };
+
+  if (loading) return <div className="p-8">Loading options...</div>;
 
   const sorted = [...options].sort((a, b) => b.priorityScore - a.priorityScore);
 

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { getAssumptions, getLeadingIndicators, updateLeadingIndicator } from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import type { Assumption, LeadingIndicator, IndicatorStatus } from './types';
 
 const STATUS_LABELS: Record<IndicatorStatus, string> = {
@@ -21,17 +21,39 @@ const STATUS_COLORS: Record<IndicatorStatus, string> = {
 const ALL_STATUSES: IndicatorStatus[] = ['not_started', 'weak_signal', 'emerging', 'accelerating', 'declining'];
 
 export default function AssumptionMonitorPanel() {
-  const [indicators, setIndicators] = useState<LeadingIndicator[]>(() => getLeadingIndicators());
-  const assumptions = getAssumptions();
+  const [indicators, setIndicators] = useState<LeadingIndicator[]>([]);
+  const [assumptions, setAssumptions] = useState<Assumption[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const [fetchedIndicators, fetchedAssumptions] = await Promise.all([
+        repository.getLeadingIndicators(),
+        repository.getAssumptions()
+      ]);
+      setIndicators(fetchedIndicators);
+      setAssumptions(fetchedAssumptions);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const assumptionMap = Object.fromEntries(assumptions.map((a: Assumption) => [a.id, a]));
 
-  const refresh = () => setIndicators(getLeadingIndicators());
-
-  const handleStatusChange = (id: string, status: IndicatorStatus) => {
-    updateLeadingIndicator(id, { currentStatus: status });
-    refresh();
+  const refresh = async () => {
+    await loadData();
   };
+
+  const handleStatusChange = async (id: string, status: IndicatorStatus) => {
+    await repository.updateLeadingIndicator(id, { currentStatus: status });
+    await refresh();
+  };
+
+  if (loading) return <div className="p-8">Loading indicators...</div>;
 
   return (
     <div className="p-8 max-w-5xl mx-auto">

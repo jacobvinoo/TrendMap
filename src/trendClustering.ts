@@ -45,6 +45,7 @@ export function clusterSignalsIntoTrends(signals: Signal[], customClusters?: Arr
 
   // Group signals by cluster name
   const clusterMap: Record<string, Signal[]> = {};
+  const unmatchedSignals: Signal[] = [];
 
   for (const signal of signals) {
     const text = `${signal.signalType} ${signal.title}`.toLowerCase();
@@ -54,6 +55,8 @@ export function clusterSignalsIntoTrends(signals: Signal[], customClusters?: Arr
         clusterMap[matchedCluster.name] = [];
       }
       clusterMap[matchedCluster.name].push(signal);
+    } else {
+      unmatchedSignals.push(signal);
     }
   }
 
@@ -154,6 +157,7 @@ export function clusterSignalsIntoTrends(signals: Signal[], customClusters?: Arr
       recommendedActions: strategicFields.recommendedActions,
       createdAt: now,
       updatedAt: now,
+      logs: [{ date: new Date().toISOString(), message: 'Trend initially generated from signal clusters' }]
     };
 
     // Prevent duplicate trend creation when a trend with same ID already exists and the source points to the same document part.

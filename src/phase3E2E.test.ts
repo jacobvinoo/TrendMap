@@ -76,7 +76,7 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
       alerts: [], summaries: [],
       strategicContext: null, assumptions: [], leadingIndicators: [],
       strategicImplications: [], scenarios: [], strategicOptions: [],
-      decisionBriefs: [], roadmapItems: [],
+      decisionBriefs: [], roadmapItems: [],   knowledgeGraph: { nodes: [], edges: [] },
     };
   });
 
@@ -101,7 +101,7 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
   it('Step 3: indicators are generated for all assumption types', () => {
     const assumptions = generateAssumptionsFromTrends(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
     saveAssumptions(assumptions);
-    const indicators = generateLeadingIndicators(assumptions);
+    const indicators = generateLeadingIndicators(assumptions, []);
     expect(indicators.length).toBeGreaterThan(0);
     expect(indicators.every(li => isValidLeadingIndicator(li))).toBe(true);
     // All assumptions have at least one indicator
@@ -110,7 +110,7 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
   });
 
   it('Step 4: implications cover opportunities, threats and risks', () => {
-    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
+    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT, []);
     expect(implications.length).toBeGreaterThan(0);
     expect(implications.every(si => isValidStrategicImplication(si))).toBe(true);
     expect(implications.some(si => si.implicationType === 'opportunity')).toBe(true);
@@ -118,9 +118,9 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
   });
 
   it('Step 5: scenarios include upside, base_case, and downside', () => {
-    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
+    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT, []);
     const assumptions = generateAssumptionsFromTrends(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
-    const indicators = generateLeadingIndicators(assumptions);
+    const indicators = generateLeadingIndicators(assumptions, []);
     const scenarios = generateScenarios(implications, assumptions, indicators, WOOLWORTHS_CONTEXT);
     expect(scenarios.every(s => isValidScenario(s))).toBe(true);
     expect(scenarios.some(s => s.scenarioType === 'upside')).toBe(true);
@@ -129,7 +129,7 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
   });
 
   it('Step 6: options are generated and prioritised correctly', () => {
-    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
+    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT, []);
     const assumptions = generateAssumptionsFromTrends(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
     const scenarios = generateScenarios(implications, assumptions, [], WOOLWORTHS_CONTEXT);
     const options = generateStrategicOptions(implications, scenarios, assumptions, WOOLWORTHS_CONTEXT);
@@ -143,8 +143,8 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
 
   it('Step 7: decision brief is generated and references all artefacts', () => {
     const assumptions = generateAssumptionsFromTrends(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
-    const indicators = generateLeadingIndicators(assumptions);
-    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
+    const indicators = generateLeadingIndicators(assumptions, []);
+    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT, []);
     const scenarios = generateScenarios(implications, assumptions, indicators, WOOLWORTHS_CONTEXT);
     const options = generateStrategicOptions(implications, scenarios, assumptions, WOOLWORTHS_CONTEXT);
     const brief = generateDecisionBrief(WOOLWORTHS_CONTEXT, implications, options, assumptions, indicators);
@@ -160,9 +160,9 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
     saveStrategicContext(WOOLWORTHS_CONTEXT);
     const assumptions = generateAssumptionsFromTrends(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
     saveAssumptions(assumptions);
-    const indicators = generateLeadingIndicators(assumptions);
+    const indicators = generateLeadingIndicators(assumptions, []);
     saveLeadingIndicators(indicators);
-    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
+    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT, []);
     saveStrategicImplications(implications);
     const scenarios = generateScenarios(implications, assumptions, indicators, WOOLWORTHS_CONTEXT);
     saveScenarios(scenarios);
@@ -182,10 +182,10 @@ describe('Phase 3 E2E Happy Path — Woolworths NZ', () => {
   });
 
   it('Evidence traceability: brief evidence ids trace to signals from approved trends', () => {
-    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
+    const implications = generateStrategicImplications(APPROVED_TRENDS, WOOLWORTHS_CONTEXT, []);
     const options = generateStrategicOptions(implications, [], [], WOOLWORTHS_CONTEXT);
     const assumptions = generateAssumptionsFromTrends(APPROVED_TRENDS, WOOLWORTHS_CONTEXT);
-    const indicators = generateLeadingIndicators(assumptions);
+    const indicators = generateLeadingIndicators(assumptions, []);
     const brief = generateDecisionBrief(WOOLWORTHS_CONTEXT, implications, options, assumptions, indicators);
     // Evidence ids in the brief must come from trend signals
     const allTrendSignals = APPROVED_TRENDS.flatMap(t => t.relatedSignalIds);

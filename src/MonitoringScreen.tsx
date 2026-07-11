@@ -1,17 +1,35 @@
 // @ts-nocheck
 
-import { useState } from 'react'; 
-import { getSources, getMonitoringRules, saveMonitoringRule, getIndustryProfile } from './mockRepository';
-import type { Source, MonitoringRule } from './types'; 
+import { useState, useEffect } from 'react'; 
+import { repository } from './repository';
+import type { Source, MonitoringRule, IndustryProfile } from './types'; 
 
 export default function MonitoringScreen() {
-  const profile = getIndustryProfile();
-  const sources = getSources().filter(s => s.status === 'approved');
-  const rules = getMonitoringRules();
-  
-  const [localRules, setLocalRules] = useState<MonitoringRule[]>(rules);
+  const [profile, setProfile] = useState<IndustryProfile | null>(null);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [localRules, setLocalRules] = useState<MonitoringRule[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleEnable = (sourceId: string) => {
+  const loadData = async () => {
+    try {
+      const [fetchedProfile, fetchedSources, fetchedRules] = await Promise.all([
+        repository.getIndustryProfile(),
+        repository.getSources(),
+        repository.getMonitoringRules()
+      ]);
+      setProfile(fetchedProfile);
+      setSources(fetchedSources.filter(s => s.status === 'approved'));
+      setLocalRules(fetchedRules);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleEnable = async (sourceId: string) => {
     if (!profile) return;
     const newRule: MonitoringRule = {
       id: `rule-${Date.now()}`,
@@ -25,28 +43,30 @@ export default function MonitoringScreen() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    saveMonitoringRule(newRule);
-    setLocalRules(getMonitoringRules());
+    await repository.saveMonitoringRule(newRule);
+    await loadData();
   };
 
-  const handleDisable = (rule: MonitoringRule) => {
+  const handleDisable = async (rule: MonitoringRule) => {
     const updated = { ...rule, enabled: false, updatedAt: new Date().toISOString() };
-    saveMonitoringRule(updated);
-    setLocalRules(getMonitoringRules());
+    await repository.saveMonitoringRule(updated);
+    await loadData();
   };
 
-  const handleFrequencyChange = (rule: MonitoringRule, freq: 'daily'|'weekly'|'monthly'|'manual') => {
+  const handleFrequencyChange = async (rule: MonitoringRule, freq: 'daily'|'weekly'|'monthly'|'manual') => {
     const updated = { ...rule, frequency: freq, updatedAt: new Date().toISOString() };
-    saveMonitoringRule(updated);
-    setLocalRules(getMonitoringRules());
+    await repository.saveMonitoringRule(updated);
+    await loadData();
   };
 
-  const handleAddKeyword = (rule: MonitoringRule, keyword: string) => {
+  const handleAddKeyword = async (rule: MonitoringRule, keyword: string) => {
     if (!keyword.trim()) return;
     const updated = { ...rule, keywords: [...rule.keywords, keyword.trim()], updatedAt: new Date().toISOString() };
-    saveMonitoringRule(updated);
-    setLocalRules(getMonitoringRules());
+    await repository.saveMonitoringRule(updated);
+    await loadData();
   };
+
+  if (loading) return <div className="p-8">Loading configuration...</div>;
 
   return (
     <div className="p-8">
@@ -59,7 +79,7 @@ export default function MonitoringScreen() {
         ) : (
           sources.map(source => {
             const rule = localRules.find(r => r.sourceId === source.id);
-            const isEnabled = rule?.enabled;
+            const isEnabled = String(rule?.enabled) === 'true';
             
             return (
               <div key={source.id} className="bg-gray-800 p-6 rounded-lg border border-gray-700">
@@ -71,13 +91,13 @@ export default function MonitoringScreen() {
                   <div>
                     {!isEnabled ? (
                       <button 
-                        onClick={() => {
+                         onClick={async () => {
                           if (rule) {
                              const updated = { ...rule, enabled: true, updatedAt: new Date().toISOString() };
-                             saveMonitoringRule(updated);
-                             setLocalRules(getMonitoringRules());
+                             await repository.saveMonitoringRule(updated);
+                             await loadData();
                           } else {
-                             handleEnable(source.id);
+                             await handleEnable(source.id);
                           }
                         }}
                         className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-medium"

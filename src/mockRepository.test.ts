@@ -6,6 +6,8 @@ import {
   getSources,
   updateSourceStatus,
   getDocuments,
+  saveDocuments,
+  deleteDocument,
   getSignals,
   saveSignals,
   getTrends,
@@ -19,7 +21,7 @@ import {
 import type { IndustryProfile, Signal, TrendStatus, Trend, EvidenceLink } from './types';
 
 beforeEach(() => {
-  resetMockData(); clearDynamicData();
+  resetMockData({ seed: true }); clearDynamicData();
 });
 
 describe('Industry Profile repository', () => {
@@ -52,15 +54,77 @@ describe('Source repository', () => {
 });
 
 describe('Document repository', () => {
-  test('returns seeded documents', () => {
+  test('returns saved documents', () => {
+    saveDocuments([{
+      id: 'doc-saved',
+      sourceId: 'src-1',
+      title: 'Saved manual document',
+      publishedDate: '2026-01-01',
+      content: 'Saved document content',
+      url: 'https://example.com/saved',
+      ingestionStatus: 'raw',
+      extractedSignalIds: [],
+    }]);
     const docs = getDocuments();
-    expect(docs.length).toBeGreaterThan(0);
-    expect(docs[0].title).toBeDefined();
+    expect(docs).toHaveLength(1);
+    expect(docs[0].title).toBe('Saved manual document');
+  });
+
+  test('deletes document with related signals and evidence', () => {
+    saveDocuments([{
+      id: 'doc-delete',
+      sourceId: 'src-1',
+      title: 'Manual doc',
+      publishedDate: '2026-01-01',
+      content: 'Manual evidence content',
+      url: 'https://example.com/manual',
+      ingestionStatus: 'raw',
+      extractedSignalIds: ['sig-delete'],
+    }]);
+    saveSignals([{
+      id: 'sig-delete',
+      documentId: 'doc-delete',
+      sourceId: 'src-1',
+      title: 'Signal to delete',
+      summary: 'summary',
+      signalType: 'technology',
+      pestleCategory: 'technology',
+      noveltyScore: 0.5,
+      strengthScore: 0.5,
+      confidenceScore: 0.5,
+      evidenceDate: '2026-01-01',
+      tags: [],
+    }]);
+    addEvidence([{
+      id: 'ev-delete',
+      trendId: 'tr-delete',
+      signalId: 'sig-delete',
+      documentId: 'doc-delete',
+      sourceId: 'src-1',
+      quote: 'example',
+      relevanceReason: 'support',
+    }]);
+
+    deleteDocument('doc-delete');
+
+    expect(getDocuments()).toHaveLength(0);
+    expect(getSignals()).toHaveLength(0);
+    expect(getEvidenceForTrend('tr-delete')).toHaveLength(0);
   });
 });
 
 describe('Signal repository', () => {
   test('starts empty and can save signals', () => {
+    saveDocuments([{
+      id: 'doc-signal',
+      sourceId: 'src-1',
+      title: 'Signal source document',
+      publishedDate: '2026-01-01',
+      content: 'Document content',
+      url: 'https://example.com/signal',
+      ingestionStatus: 'raw',
+      extractedSignalIds: [],
+    }]);
     expect(getSignals()).toHaveLength(0);
     const sig: Signal = {
       id: 'sig-1',
@@ -201,7 +265,7 @@ describe('Evidence repository', () => {
       updatedAt: '2026-01-01',
     };
     saveTrends([trend]); 
-    addEvidence(evidence);
+    addEvidence([evidence]);
     const result = getEvidenceForTrend('tr-4');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('ev-1');

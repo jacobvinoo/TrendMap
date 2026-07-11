@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { getAssumptions, saveAssumptions, updateAssumption, getTrends, getStrategicContext } from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateAssumptionsFromTrends } from './assumptionEngine';
 import type { Assumption, AssumptionType, AssumptionStatus } from './types';
 
@@ -25,24 +25,44 @@ const ALL_TYPES: AssumptionType[] = [
 ];
 
 export default function AssumptionsScreen() {
-  const [assumptions, setAssumptions] = useState<Assumption[]>(() => getAssumptions());
+  const [assumptions, setAssumptions] = useState<Assumption[]>([]);
   const [filterType, setFilterType] = useState<AssumptionType | 'all'>('all');
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setAssumptions(getAssumptions());
+  const loadData = async () => {
+    try {
+      const data = await repository.getAssumptions();
+      setAssumptions(data);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleGenerate = () => {
-    const trends = getTrends();
-    const ctx = getStrategicContext();
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refresh = async () => {
+    await loadData();
+  };
+
+  const handleGenerate = async () => {
+    const [trends, ctx] = await Promise.all([
+      repository.getTrends(),
+      repository.getStrategicContext()
+    ]);
     if (!ctx) return;
     const generated = generateAssumptionsFromTrends(trends, ctx);
-    saveAssumptions(generated);
-    refresh();
+    await repository.saveAssumptions(generated);
+    await refresh();
   };
 
-  const handleMarkStatus = (id: string, status: AssumptionStatus) => {
-    updateAssumption(id, { status });
-    refresh();
+  const handleMarkStatus = async (id: string, status: AssumptionStatus) => {
+    await repository.updateAssumption(id, { status });
+    await refresh();
   };
+
+  if (loading) return <div className="p-8">Loading assumptions...</div>;
 
   const filtered = filterType === 'all'
     ? assumptions

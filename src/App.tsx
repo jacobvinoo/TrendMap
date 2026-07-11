@@ -1,7 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { Menu, X, Compass, Activity, Target } from 'lucide-react';
+import { Menu, X, Compass, Activity, Target, Database, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import './App.css';
 import IndustrySetup from './IndustrySetup';
+import TrendThemesScreen from './TrendThemesScreen';
 import SourceLibrary from './SourceLibrary';
 import DocumentIntake from './DocumentIntake';
 import SignalsScreen from './SignalsScreen';
@@ -19,6 +20,12 @@ import ScenariosScreen from './ScenariosScreen';
 import StrategicOptionsScreen from './StrategicOptionsScreen';
 import DecisionBriefScreen from './DecisionBriefScreen';
 import RoadmapScreen from './RoadmapScreen';
+import AgentActivityScreen from './AgentActivityScreen';
+import AgentDebateScreen from './AgentDebateScreen';
+import PredictionTimelineScreen from './PredictionTimelineScreen';
+import SemanticSearchScreen from './SemanticSearchScreen';
+import AdminDataHealthScreen from './AdminDataHealthScreen';
+import { BrainCircuit } from 'lucide-react';
 
 // Lazy-load the debug panel – only bundled in dev
 const LazyTraceabilityPanel = import.meta.env.DEV
@@ -29,9 +36,11 @@ const LazyTraceabilityPanel = import.meta.env.DEV
     )
   : null;
 
-type Tab = 'setup' | 'sources' | 'documents' | 'signals' | 'trends' | 'insights'
+type Tab = 'setup' | 'themes' | 'sources' | 'documents' | 'signals' | 'trends' | 'insights'
   | 'dashboard' | 'rules' | 'alerts'
   | 'strategy' | 'assumptions' | 'indicators' | 'implications' | 'scenarios' | 'options' | 'brief' | 'roadmap'
+  | 'agent-activity' | 'prediction-timeline' | 'agent-debate'
+  | 'semantic-search' | 'data-health'
   | 'debug-traceability';
 
 const PHASES = [
@@ -41,6 +50,7 @@ const PHASES = [
     icon: Compass,
     tabs: [
       { id: 'setup',    label: 'Industry Setup' },
+      { id: 'themes',   label: 'Themes' },
       { id: 'sources',  label: 'Sources' },
       { id: 'documents',label: 'Documents' },
       { id: 'signals',  label: 'Signals' },
@@ -72,6 +82,25 @@ const PHASES = [
       { id: 'brief',       label: 'Decision Brief' },
       { id: 'roadmap',     label: 'Roadmap' },
     ]
+  },
+  {
+    id: 'p4',
+    title: 'Phase 4: Intelligence Hub',
+    icon: BrainCircuit,
+    tabs: [
+      { id: 'agent-activity', label: 'Agent Activity' },
+      { id: 'agent-debate', label: 'Debate Console' },
+      { id: 'prediction-timeline', label: 'Prediction Timeline' },
+    ]
+  },
+  {
+    id: 'p5',
+    title: 'Phase 5: Operations',
+    icon: Database,
+    tabs: [
+      { id: 'semantic-search', label: 'Semantic Search' },
+      { id: 'data-health', label: 'Data Health' },
+    ]
   }
 ];
 
@@ -90,6 +119,10 @@ function App() {
     getTabFromHash(typeof window !== 'undefined' ? window.location.hash : '')
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('trendmap.sidebarCollapsed') === 'true';
+  });
 
   // Keep tab state in sync with browser back/forward navigation
   useEffect(() => {
@@ -105,6 +138,16 @@ function App() {
     window.location.hash = tab;
     setActiveTab(tab);
     setIsSidebarOpen(false);
+  };
+
+  const toggleSidebarCollapsed = () => {
+    setIsSidebarCollapsed((current) => {
+      const next = !current;
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('trendmap.sidebarCollapsed', String(next));
+      }
+      return next;
+    });
   };
 
   const activePhase = PHASES.find(p => p.tabs.some(t => t.id === activeTab));
@@ -135,15 +178,26 @@ function App() {
       {/* ── Sidebar Navigation ──────────────────────────────────────── */}
       <nav
         aria-label="Main navigation"
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#13132b] border-r border-[#2a2a4a] flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 flex-shrink-0
+        className={`fixed inset-y-0 left-0 z-50 bg-[#13132b] border-r border-[#2a2a4a] flex flex-col transform transition-all duration-300 ease-in-out md:relative md:translate-x-0 flex-shrink-0
+          ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'}
+          w-64
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
         {/* Logo / brand / mobile close */}
-        <div className="flex items-center justify-between p-5 border-b border-[#2a2a4a] mb-6">
-          <span className="font-bold text-xl text-[#a0a0ff]">
+        <div className={`flex items-center border-b border-[#2a2a4a] mb-6 ${isSidebarCollapsed ? 'md:justify-center md:px-3' : 'justify-between'} p-5`}>
+          <span className={`font-bold text-xl text-[#a0a0ff] ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
             TrendMap
           </span>
+          <button
+            type="button"
+            className="hidden md:inline-flex text-gray-400 hover:text-white p-1.5 rounded-md hover:bg-[#1a1a3a]"
+            onClick={toggleSidebarCollapsed}
+            aria-label={isSidebarCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
+            title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          </button>
           <button 
             className="md:hidden text-gray-400 hover:text-white p-1"
             onClick={() => setIsSidebarOpen(false)}
@@ -153,8 +207,8 @@ function App() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3">
+        <div className={`flex-1 overflow-y-auto pb-4 space-y-2 ${isSidebarCollapsed ? 'md:px-3' : 'px-4'}`}>
+          <div className={`text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3 ${isSidebarCollapsed ? 'md:sr-only' : ''}`}>
             Workflow
           </div>
           {PHASES.map((phase) => {
@@ -164,14 +218,16 @@ function App() {
               <button
                 key={phase.id}
                 onClick={() => handleTabClick(phase.tabs[0].id as Tab)}
+                title={phase.title}
+                aria-label={phase.title}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-medium ${
                   isActive 
                     ? 'bg-purple-600/20 text-purple-400' 
                     : 'text-gray-400 hover:bg-[#1a1a3a] hover:text-gray-200'
-                }`}
+                } ${isSidebarCollapsed ? 'md:justify-center md:gap-0' : ''}`}
               >
-                <Icon size={18} />
-                <span>{phase.title}</span>
+                <Icon size={18} className="flex-shrink-0" />
+                <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>{phase.title}</span>
               </button>
             );
           })}
@@ -181,13 +237,16 @@ function App() {
             <div className="mt-8 pt-6 border-t border-[#2a2a4a]">
               <button
                 onClick={() => handleTabClick('debug-traceability' as Tab)}
+                title="Traceability"
+                aria-label="Traceability"
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-medium ${
                   activeTab === 'debug-traceability'
                     ? 'bg-[#2a2a4a] text-white'
                     : 'text-[#5a5aff] hover:bg-[#1a1a3a]'
-                }`}
+                } ${isSidebarCollapsed ? 'md:justify-center md:gap-0' : ''}`}
               >
-                <span>🔍 Traceability</span>
+                <span aria-hidden="true">🔍</span>
+                <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>Traceability</span>
               </button>
             </div>
           )}
@@ -221,6 +280,7 @@ function App() {
         {/* Screen Container */}
         <main className="flex-1 overflow-y-auto">
           {activeTab === 'setup'    && <IndustrySetup />}
+          {activeTab === 'themes'   && <TrendThemesScreen />}
           {activeTab === 'sources'  && <SourceLibrary />}
           {activeTab === 'documents'&& <DocumentIntake />}
           {activeTab === 'signals'  && <SignalsScreen />}
@@ -241,6 +301,16 @@ function App() {
           {activeTab === 'options'      && <StrategicOptionsScreen />}
           {activeTab === 'brief'        && <DecisionBriefScreen />}
           {activeTab === 'roadmap'      && <RoadmapScreen />}
+          
+          {/* Phase 4 screens */}
+          {activeTab === 'agent-activity' && <AgentActivityScreen />}
+          {activeTab === 'agent-debate' && <AgentDebateScreen />}
+          {activeTab === 'prediction-timeline' && <PredictionTimelineScreen />}
+
+          {/* Phase 5 screens */}
+          {activeTab === 'semantic-search' && <SemanticSearchScreen />}
+          {activeTab === 'data-health' && <AdminDataHealthScreen />}
+          
           {activeTab === 'debug-traceability' && LazyTraceabilityPanel && (
             <Suspense fallback={<p className="p-6 text-gray-400">Loading traceability panel...</p>}>
               <LazyTraceabilityPanel />

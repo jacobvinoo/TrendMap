@@ -28,12 +28,14 @@ import type {
   StrategicOption,
   DecisionBrief,
   RoadmapItem,
+  TrendTheme,
 } from './types';
 
 declare global {
   // eslint-disable-next-line no-var
   var __mockRepoState: {
     industryProfile: IndustryProfile | null;
+    trendThemes: TrendTheme[];
     sources: Source[];
     documents: Document[];
     signals: Signal[];
@@ -56,13 +58,42 @@ declare global {
     strategicOptions: StrategicOption[];
     decisionBriefs: DecisionBrief[];
     roadmapItems: RoadmapItem[];
+    agentActivities?: any[];
+    debates?: any[];
+    predictions?: any[];
+    activities?: any[];
+    knowledgeGraph?: any;
   } | undefined;
+}
+
+
+function persistState() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const key = import.meta.env.VITE_E2E_TEST === 'true' ? 'trendmap_mock_test' : 'trendmap_mock_dev';
+    window.localStorage.setItem(key, JSON.stringify(globalThis.__mockRepoState));
+  }
 }
 
 function initState() {
   if (!globalThis.__mockRepoState) {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const key = import.meta.env.VITE_E2E_TEST === 'true' ? 'trendmap_mock_test' : 'trendmap_mock_dev';
+      const stored = window.localStorage.getItem(key);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            globalThis.__mockRepoState = parsed;
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to parse stored state", e);
+        }
+      }
+    }
     globalThis.__mockRepoState = {
       industryProfile: null,
+      trendThemes: [],
       sources: [],
       documents: [],
       signals: [],
@@ -85,380 +116,62 @@ function initState() {
       strategicOptions: [],
       decisionBriefs: [],
       roadmapItems: [],
+      agentActivities: [],
     };
   }
 }
 
 initState();
 
-function seedData() {
-  const state = globalThis.__mockRepoState!;
-  // Industry profile mock
-  state.industryProfile = {
-    id: 'ind-1',
-    name: 'Online Grocery',
-    geography: 'Global',
-    description: 'Mock industry for Phase 1',
-    strategicPriorities: [],
-    customerSegments: [],
-    competitors: [],
-    timeHorizons: [],
-  };
+import { seedE2EData } from './seedE2EData';
+import { seedPhase3 } from './seedPhase3';
 
-  // Sources mock
-  state.sources = [
-    {
-      id: 'src-1',
-      name: 'Retail Technology News',
-      url: 'https://example.com/tech',
-      sourceType: 'news',
-      credibilityScore: 0.8,
-      relevanceScore: 0.7,
-      freshnessScore: 0.9,
-      status: 'approved' as SourceStatus,
-      notes: 'Good tech source',
-    },
-    {
-      id: 'src-2',
-      name: 'Grocery Industry Publication',
-      url: 'https://example.com/grocery',
-      sourceType: 'publication',
-      credibilityScore: 0.85,
-      relevanceScore: 0.75,
-      freshnessScore: 0.85,
-      status: 'rejected' as SourceStatus,
-      notes: 'Too narrow',
-    },
-    {
-      id: 'src-3',
-      name: 'Journal of AI Research',
-      url: 'https://example.com/ai-research',
-      sourceType: 'academic',
-      credibilityScore: 0.95,
-      relevanceScore: 0.6,
-      freshnessScore: 0.7,
-      status: 'approved' as SourceStatus,
-      notes: 'High credibility',
-    },
-    {
-      id: 'src-4',
-      name: 'Consumer Insights Quarterly',
-      url: 'https://example.com/consumer',
-      sourceType: 'report',
-      credibilityScore: 0.8,
-      relevanceScore: 0.9,
-      freshnessScore: 0.8,
-      status: 'approved' as SourceStatus,
-      notes: '',
-    },
-    {
-      id: 'src-5',
-      name: 'Competitor PR Hub',
-      url: 'https://example.com/pr',
-      sourceType: 'pr',
-      credibilityScore: 0.5,
-      relevanceScore: 0.8,
-      freshnessScore: 0.9,
-      status: 'suggested' as SourceStatus,
-      notes: 'Review for bias',
-    },
-    {
-      id: 'src-6',
-      name: 'Global Retail Analytics',
-      url: 'https://example.com/analytics',
-      sourceType: 'research',
-      credibilityScore: 0.9,
-      relevanceScore: 0.85,
-      freshnessScore: 0.8,
-      status: 'approved' as SourceStatus,
-      notes: '',
-    },
-  ];
-
-  // Documents mock
-  state.documents = [
-    {
-      id: 'doc-1',
-      sourceId: 'src-1',
-      title: 'AI‑assisted grocery search',
-      publishedDate: '2026-01-10',
-      content: 'An AI assistant is being integrated into grocery search engines to enable conversational commerce.',
-      url: 'https://example.com/doc1',
-      ingestionStatus: 'pending',
-      extractedSignalIds: [],
-    },
-    {
-      id: 'doc-2',
-      sourceId: 'src-2',
-      title: 'Retail media sponsored placements',
-      publishedDate: '2026-01-12',
-      content: 'Retail media platforms are adding sponsored placements to search results.',
-      url: 'https://example.com/doc2',
-      ingestionStatus: 'pending',
-      extractedSignalIds: [],
-    },
-    {
-      id: 'doc-3',
-      sourceId: 'src-1',
-      title: 'Already Extracted Doc',
-      publishedDate: '2026-01-14',
-      content: 'This document has already been processed and lacks meaningful signals.',
-      url: 'https://example.com/doc3',
-      ingestionStatus: 'extracted',
-      extractedSignalIds: ['sig-1'],
-    },
-    {
-      id: 'doc-4',
-      sourceId: 'src-3',
-      title: 'Trust in Algorithmic Sorting',
-      publishedDate: '2026-01-15',
-      content: 'Transparency and trust are essential for consumer adoption of explainability in AI recommendations.',
-      url: 'https://example.com/doc4',
-      ingestionStatus: 'pending',
-      extractedSignalIds: [],
-    },
-    {
-      id: 'doc-5',
-      sourceId: 'src-4',
-      title: 'Combating Zero Results',
-      publishedDate: '2026-01-18',
-      content: 'Brands are focusing on reducing zero result queries to improve relevance and retention.',
-      url: 'https://example.com/doc5',
-      ingestionStatus: 'pending',
-      extractedSignalIds: [],
-    },
-    {
-      id: 'doc-6',
-      sourceId: 'src-5',
-      title: 'New Hyper-Personalization Engine',
-      publishedDate: '2026-01-20',
-      content: 'Our competitor launched a hyper-personalized storefront with tailored offerings.',
-      url: 'https://example.com/doc6',
-      ingestionStatus: 'pending',
-      extractedSignalIds: [],
-    },
-    {
-      id: 'doc-7',
-      sourceId: 'src-6',
-      title: 'Rise of Recipe-to-Cart',
-      publishedDate: '2026-01-22',
-      content: 'Shoppers increasingly use recipe meal planning tools to fill their basket seamlessly.',
-      url: 'https://example.com/doc7',
-      ingestionStatus: 'pending',
-      extractedSignalIds: [],
-    }
-  ];
-
-  // Seed signals — traceable back to seeded documents and sources
-  state.signals = [
-    {
-      id: 'sig-1', documentId: 'doc-1', sourceId: 'src-1',
-      title: 'Retailers deploying AI-powered grocery search',
-      summary: 'Multiple grocery retailers piloting natural language search to reduce zero-result rates.',
-      signalType: 'technology', pestleCategory: 'Technology',
-      polarity: 'positive', noveltyScore: 0.85, strengthScore: 0.8, confidenceScore: 0.82, momentumScore: 0.78,
-      evidenceDate: '2026-01-10', tags: ['AI', 'search', 'grocery', 'natural-language'],
-    },
-    {
-      id: 'sig-2', documentId: 'doc-2', sourceId: 'src-2',
-      title: 'Consumer adoption of AI grocery assistants accelerating',
-      summary: 'Survey shows 34% of online grocery shoppers have used an AI assistant for product discovery.',
-      signalType: 'consumer', pestleCategory: 'Social',
-      polarity: 'positive', noveltyScore: 0.78, strengthScore: 0.75, confidenceScore: 0.8, momentumScore: 0.82,
-      evidenceDate: '2026-01-12', tags: ['AI', 'consumer', 'adoption', 'grocery'],
-    },
-    {
-      id: 'sig-3', documentId: 'doc-3', sourceId: 'src-3',
-      title: 'Conversational shopping interfaces emerging in e-commerce',
-      summary: 'Chat-based shopping interfaces reducing basket abandonment in early pilots.',
-      signalType: 'technology', pestleCategory: 'Technology',
-      polarity: 'positive', noveltyScore: 0.72, strengthScore: 0.65, confidenceScore: 0.7, momentumScore: 0.6,
-      evidenceDate: '2026-01-14', tags: ['conversational', 'commerce', 'chat', 'search'],
-    },
-    {
-      id: 'sig-4', documentId: 'doc-4', sourceId: 'src-4',
-      title: 'Retail media ad revenue surpassing traditional digital in grocery',
-      summary: 'Retail media networks now account for 12% of total grocery digital ad spend — up 40% YoY.',
-      signalType: 'economic', pestleCategory: 'Economic',
-      polarity: 'positive', noveltyScore: 0.7, strengthScore: 0.85, confidenceScore: 0.88, momentumScore: 0.75,
-      evidenceDate: '2026-01-15', tags: ['retail-media', 'advertising', 'revenue', 'grocery'],
-    },
-    {
-      id: 'sig-5', documentId: 'doc-5', sourceId: 'src-4',
-      title: 'Sponsored placements degrading search relevance in some markets',
-      summary: 'Consumer trust declining when sponsored products dominate zero-click search results.',
-      signalType: 'risk', pestleCategory: 'Social',
-      polarity: 'negative', noveltyScore: 0.65, strengthScore: 0.7, confidenceScore: 0.72, momentumScore: 0.55,
-      evidenceDate: '2026-01-16', tags: ['retail-media', 'trust', 'relevance', 'sponsored'],
-    },
-    {
-      id: 'sig-6', documentId: 'doc-6', sourceId: 'src-5',
-      title: 'Hyper-personalisation driving 18% basket size uplift in pilots',
-      summary: 'AI-driven personalised recommendations producing measurable basket uplift in controlled trials.',
-      signalType: 'technology', pestleCategory: 'Technology',
-      polarity: 'positive', noveltyScore: 0.8, strengthScore: 0.75, confidenceScore: 0.76, momentumScore: 0.7,
-      evidenceDate: '2026-01-20', tags: ['personalisation', 'recommendations', 'basket', 'AI'],
-    },
-    {
-      id: 'sig-7', documentId: 'doc-7', sourceId: 'src-6',
-      title: 'Recipe-to-cart reducing planning friction for weekly shoppers',
-      summary: 'Recipe-driven shopping tools increasing average session value for engaged users.',
-      signalType: 'consumer', pestleCategory: 'Social',
-      polarity: 'positive', noveltyScore: 0.62, strengthScore: 0.6, confidenceScore: 0.65, momentumScore: 0.5,
-      evidenceDate: '2026-01-22', tags: ['recipe', 'cart', 'meal-planning', 'personalisation'],
-    },
-  ];
-
-  // Seed four approved trends — the canonical Online Grocery / Retail Search mock trends
-  // These are required for Phase 3 strategic analysis to work on fresh load.
-  state.trends = [
-    {
-      id: 'trend-ai-grocery-search',
-      name: 'AI-assisted grocery discovery',
-      status: 'approved',
-      summary: 'Retailers are deploying AI-powered natural language search to help shoppers discover products faster, reduce zero-result rates, and increase basket conversion. Consumer adoption is accelerating with 34%+ of online grocery users having tried an AI assistant.',
-      horizon: 'short',
-      likelihoodScore: 0.82,
-      confidenceScore: 0.85,
-      momentumScore: 0.80,
-      impactScore: 0.92,
-      maturityStage: 'emerging',
-      relatedSignalIds: ['sig-1', 'sig-2'],
-      drivers: ['Improving NLP model quality', 'Consumer comfort with AI tools', 'Competitive pressure from pure-play e-commerce'],
-      blockers: ['Data quality and catalogue coverage', 'Customer trust in AI recommendations', 'Integration complexity'],
-      whatNeedsToBeTrue: ['NLP accuracy >90% on grocery queries', 'Shopper willingness to use conversational interfaces', 'Internal data pipelines ready for real-time inference'],
-      leadingIndicators: ['Number of retailers publicly launching AI search', 'Zero-result rate trends in pilot markets', 'Consumer survey data on AI tool usage'],
-      monitoringQuestions: ['Which retailers have launched AI search in ANZ?', 'What is the reported impact on conversion?', 'How are customers responding to AI-generated results?'],
-      recommendedActions: ['Run a time-boxed AI search pilot on a single product category', 'Define success metrics before launch', 'Monitor competitor AI search feature announcements'],
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20',
-    },
-    {
-      id: 'trend-retail-media-maturation',
-      name: 'Retail media influence on search outcomes',
-      status: 'approved',
-      summary: 'Retail media ad revenue in grocery is growing 40% YoY. Sponsored placements are increasingly influencing what appears in search results, creating tension between commercial objectives and shopper relevance. Trust risk is emerging as a counter-signal.',
-      horizon: 'short',
-      likelihoodScore: 0.85,
-      confidenceScore: 0.88,
-      momentumScore: 0.75,
-      impactScore: 0.78,
-      maturityStage: 'growth',
-      relatedSignalIds: ['sig-4', 'sig-5'],
-      drivers: ['Third-party cookie deprecation', 'First-party data value', 'Retailer diversification of revenue streams'],
-      blockers: ['Customer trust erosion if relevance degrades', 'Regulatory scrutiny on ad disclosure', 'Measurement complexity'],
-      whatNeedsToBeTrue: ['Sponsored placements can coexist with relevant organic results', 'Retailers can measure both ad revenue and shopper satisfaction', 'Transparency tools reduce customer concern'],
-      leadingIndicators: ['ANZ grocery retail media revenue growth', 'Consumer trust scores in AI-powered search', 'Regulatory announcements on algorithmic ad disclosure'],
-      monitoringQuestions: ['What percentage of search results are sponsored in key categories?', 'Is customer satisfaction correlated with sponsored placement density?', 'Are regulators signalling disclosure requirements?'],
-      recommendedActions: ['Audit current sponsored placement density vs relevance scores', 'Establish customer trust measurement baseline', 'Evaluate transparency labelling options'],
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20',
-    },
-    {
-      id: 'trend-conversational-commerce',
-      name: 'Conversational commerce in grocery',
-      status: 'approved',
-      summary: 'Chat-based and voice-driven shopping interfaces are emerging as a complementary channel to keyword search. Early pilots show basket abandonment reduction and increased engagement for complex multi-item orders.',
-      horizon: 'medium',
-      likelihoodScore: 0.65,
-      confidenceScore: 0.70,
-      momentumScore: 0.60,
-      impactScore: 0.72,
-      maturityStage: 'emerging',
-      relatedSignalIds: ['sig-3'],
-      drivers: ['Consumer familiarity with chat interfaces (WhatsApp, Messenger)', 'Voice assistant penetration in home', 'Grocery complexity suits conversational UX'],
-      blockers: ['Voice accuracy for grocery SKUs is still limited', 'Platform fragmentation', 'Low consumer awareness of grocery voice commerce'],
-      whatNeedsToBeTrue: ['Voice recognition accuracy >95% on grocery product names', 'Shopper willingness to use voice for grocery', 'API integrations with major voice platforms available'],
-      leadingIndicators: ['Voice assistant grocery commerce announcements', 'Chat-based grocery pilot launch count', 'Consumer survey data on voice grocery interest'],
-      monitoringQuestions: ['Which platforms are launching grocery voice commerce in ANZ?', 'What is the task completion rate in chat-based grocery pilots?', 'Are younger shopper cohorts adopting conversational shopping?'],
-      recommendedActions: ['Monitor voice platform grocery API availability', 'Test a limited conversational ordering pilot via chat', 'Survey shopper interest in voice-based repeat ordering'],
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20',
-    },
-    {
-      id: 'trend-personalised-recommendations',
-      name: 'AI-powered personalised product recommendations',
-      status: 'approved',
-      summary: 'AI-driven personalised recommendations are generating measurable basket uplift (18%+ in pilots) and improving repeat purchase rates. Hyper-personalisation beyond category-level is emerging as the next step, enabled by first-party purchase history and browsing data.',
-      horizon: 'short',
-      likelihoodScore: 0.78,
-      confidenceScore: 0.76,
-      momentumScore: 0.70,
-      impactScore: 0.82,
-      maturityStage: 'growth',
-      relatedSignalIds: ['sig-6', 'sig-7'],
-      drivers: ['Rich first-party data available in grocery', 'Proven basket uplift from personalisation', 'Consumer expectation of relevance set by streaming and social platforms'],
-      blockers: ['Data privacy concerns and consent requirements', 'Recommendation diversity vs filter bubble risk', 'Model refresh latency'],
-      whatNeedsToBeTrue: ['Customer consents to personalisation use', 'Recommendation models refresh at least daily', 'Personalisation does not conflict with sponsored placement objectives'],
-      leadingIndicators: ['Basket size uplift in personalisation cohort vs control', 'Customer opt-in rate for personalised recommendations', 'Competitor personalisation feature launches'],
-      monitoringQuestions: ['What is the current personalisation coverage across the product catalogue?', 'How does personalisation interact with sponsored placement ranking?', 'Are privacy regulations changing consent requirements?'],
-      recommendedActions: ['Expand personalisation from category to SKU level', 'Implement a basket uplift measurement framework', 'Review consent and transparency approach against emerging regulation'],
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20',
-    },
-  ];
-
-  // Seed the Woolworths NZ strategic context for Phase 3
-  state.strategicContext = {
-    id: 'ctx-woolworths-nz',
-    industryProfileId: 'ind-1',
-    companyName: 'Woolworths NZ',
-    businessModel: 'Online grocery retailer providing AI-enhanced discovery, search, and personalised shopping experiences',
-    targetCustomers: ['Home shoppers', 'Busy families', 'Health-conscious consumers', 'Budget-conscious shoppers'],
-    strategicGoals: [
-      'Improve search conversion and reduce zero-result rates',
-      'Increase average basket size through personalisation',
-      'Grow retail media revenue without degrading customer experience',
-      'Build AI-assisted discovery capabilities ahead of competitors',
-      'Improve customer trust in algorithmic recommendations',
-    ],
-    currentCapabilities: [
-      'Keyword search with basic relevance ranking',
-      'Retail media placement system',
-      'Customer purchase history and first-party data',
-      'Basic category-level personalisation',
-      'Analytics event tracking',
-      'Mobile app and web storefront',
-    ],
-    constraints: [
-      'Data quality varies across product catalogue',
-      'Sponsored placement revenue goals may conflict with search relevance',
-      'Limited AI/ML implementation capacity',
-      'Customer trust is critical — high reputational risk from poor AI behaviour',
-      'Regulatory concern around AI transparency and ad disclosure may increase',
-    ],
-    riskAppetite: 'medium',
-    planningHorizons: ['3 months', '6 months', '12 months', '24 months'],
-  };
-
-  state.evidences = [];
+function seedData(force = false) {
+  if (force || import.meta.env.VITE_E2E_TEST === 'true') {
+    seedE2EData();
+    seedPhase3();
+  } else {
+    // Seeding is disabled per user request to enforce empty initial state for manual testing
+  }
 }
-
 
 // Seed on first load
 seedData();
 
 // ----- Exported reset for test isolation -----
-export function resetMockData() {
-  // Re‑initialize the shared state and reseed
+export function resetMockData(options: { seed?: boolean } = {}) {
+  // Re-initialize the shared state. Tests that need sample data seed explicitly.
   globalThis.__mockRepoState = undefined;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.removeItem('trendmap_mock_test');
+    window.localStorage.removeItem('trendmap_mock_dev');
+  }
   initState();
-  seedData();
+  if (options.seed) seedData(true);
+  persistState();
 }
 
 export function clearDynamicData() {
   if (globalThis.__mockRepoState) {
-    globalThis.__mockRepoState.signals = [];
-    globalThis.__mockRepoState.trends = [];
-    globalThis.__mockRepoState.evidences = [];
-    globalThis.__mockRepoState.assumptions = [];
-    globalThis.__mockRepoState.leadingIndicators = [];
-    globalThis.__mockRepoState.strategicImplications = [];
-    globalThis.__mockRepoState.scenarios = [];
-    globalThis.__mockRepoState.strategicOptions = [];
-    globalThis.__mockRepoState.decisionBriefs = [];
-    globalThis.__mockRepoState.roadmapItems = [];
+    globalThis.__mockRepoState!.documents = [];
+    globalThis.__mockRepoState!.signals = [];
+    globalThis.__mockRepoState!.trends = [];
+    globalThis.__mockRepoState!.evidences = [];
+    globalThis.__mockRepoState!.summaries = [];
+    globalThis.__mockRepoState!.alerts = [];
+    globalThis.__mockRepoState!.assumptions = [];
+    globalThis.__mockRepoState!.leadingIndicators = [];
+    globalThis.__mockRepoState!.strategicImplications = [];
+    globalThis.__mockRepoState!.scenarios = [];
+    globalThis.__mockRepoState!.strategicOptions = [];
+    globalThis.__mockRepoState!.decisionBriefs = [];
+    globalThis.__mockRepoState!.roadmapItems = [];
+    persistState();
   }
+}
+
+if (typeof window !== 'undefined') {
+  (window as any).clearDynamicData = clearDynamicData;
 }
 
 // ----- Industry -----
@@ -468,6 +181,26 @@ export function getIndustryProfile(): IndustryProfile | null {
 
 export function saveIndustryProfile(profile: IndustryProfile): void {
   globalThis.__mockRepoState!.industryProfile = profile;
+  persistState();
+}
+
+export function getTrendThemes(): TrendTheme[] {
+  return [...(globalThis.__mockRepoState!.trendThemes || [])];
+}
+
+export function saveTrendThemes(themes: TrendTheme[]): void {
+  globalThis.__mockRepoState!.trendThemes = themes;
+  persistState();
+}
+
+export function updateTrendTheme(themeId: string, patch: Partial<TrendTheme>): void {
+  const current = globalThis.__mockRepoState!.trendThemes || [];
+  const index = current.findIndex((theme) => theme.id === themeId);
+  if (index >= 0) {
+    current[index] = { ...current[index], ...patch, updatedAt: new Date().toISOString() };
+    globalThis.__mockRepoState!.trendThemes = current;
+    persistState();
+  }
 }
 
 // ----- Sources -----
@@ -480,6 +213,7 @@ export function updateSourceStatus(sourceId: string, status: SourceStatus): void
   if (idx !== -1) {
     globalThis.__mockRepoState!.sources[idx] = { ...globalThis.__mockRepoState!.sources[idx], status };
   }
+  persistState();
 }
 
 export function updateSourceNote(sourceId: string, note: string): void {
@@ -488,6 +222,7 @@ export function updateSourceNote(sourceId: string, note: string): void {
     const existing = globalThis.__mockRepoState!.sources[idx].notes ?? '';
     globalThis.__mockRepoState!.sources[idx] = { ...globalThis.__mockRepoState!.sources[idx], notes: existing ? `${existing}\n${note}` : note };
   }
+  persistState();
 }
 
 // ----- Documents -----
@@ -500,6 +235,7 @@ export function updateDocumentIngestionStatus(documentId: string, status: string
   if (idx !== -1) {
     globalThis.__mockRepoState!.documents[idx] = { ...globalThis.__mockRepoState!.documents[idx], ingestionStatus: status };
   }
+  persistState();
 }
 
 export function updateDocumentExtractedSignals(documentId: string, signalIds: string[]): void {
@@ -513,6 +249,23 @@ export function updateDocumentExtractedSignals(documentId: string, signalIds: st
       extractedSignalIds: uniqueNewIds 
     };
   }
+  persistState();
+}
+
+export function deleteDocument(documentId: string): void {
+  const signalIds = new Set(
+    globalThis.__mockRepoState!.signals
+      .filter((signal) => signal.documentId === documentId)
+      .map((signal) => signal.id)
+  );
+  globalThis.__mockRepoState!.documents = globalThis.__mockRepoState!.documents.filter((document) => document.id !== documentId);
+  globalThis.__mockRepoState!.signals = globalThis.__mockRepoState!.signals.filter((signal) => signal.documentId !== documentId);
+  globalThis.__mockRepoState!.evidences = globalThis.__mockRepoState!.evidences.filter((evidence) => {
+    const evidenceDocumentId = (evidence as any).documentId ?? (evidence as any).document_id;
+    const evidenceSignalId = (evidence as any).signalId ?? (evidence as any).signal_id;
+    return evidenceDocumentId !== documentId && !signalIds.has(evidenceSignalId);
+  });
+  persistState();
 }
 
 // ----- Signals -----
@@ -524,9 +277,17 @@ export function saveSignals(newSignals: Signal[]): void {
   const current = globalThis.__mockRepoState!.signals;
   for (const s of newSignals) {
     const idx = current.findIndex(existing => existing.id === s.id);
-    if (idx !== -1) current[idx] = s;
-    else current.push(s);
+    if (idx !== -1) {
+      const existingLogs = current[idx].logs || [];
+      const newLog = s.logs && s.logs.length > 0 ? s.logs[0] : { date: new Date().toISOString(), message: 'Signal updated from re-extraction' };
+      s.logs = [...existingLogs, newLog];
+      current[idx] = s;
+    } else {
+      if (!s.logs) s.logs = [{ date: new Date().toISOString(), message: 'Signal initially extracted' }];
+      current.push(s);
+    }
   }
+  persistState();
 }
 
 // ----- Trends -----
@@ -546,12 +307,15 @@ export function saveTrends(newTrends: Trend[]): void {
       // Preserve existing human-reviewed state (name, summary, status, etc)
       // Only merge in new related signal IDs to maintain traceability
       const existing = current[idx];
-      const mergedSignalIds = Array.from(new Set([...existing.relatedSignalIds, ...t.relatedSignalIds]));
+      const existingIds = Array.isArray(existing.relatedSignalIds) ? existing.relatedSignalIds : [];
+      const newIds = Array.isArray(t.relatedSignalIds) ? t.relatedSignalIds : [];
+      const mergedSignalIds = Array.from(new Set([...existingIds, ...newIds]));
       current[idx] = { ...existing, relatedSignalIds: mergedSignalIds };
     } else {
       current.push(t);
     }
   }
+  persistState();
 }
 
 export function updateTrendStatus(trendId: string, status: TrendStatus): void {
@@ -559,6 +323,7 @@ export function updateTrendStatus(trendId: string, status: TrendStatus): void {
   if (idx !== -1) {
     globalThis.__mockRepoState!.trends[idx] = { ...globalThis.__mockRepoState!.trends[idx], status };
   }
+  persistState();
 }
 
 export function updateTrend(trendId: string, patch: Partial<Trend>): void {
@@ -566,6 +331,7 @@ export function updateTrend(trendId: string, patch: Partial<Trend>): void {
   if (idx !== -1) {
     globalThis.__mockRepoState!.trends[idx] = { ...globalThis.__mockRepoState!.trends[idx], ...patch } as Trend;
   }
+  persistState();
 }
 
 // ----- Evidence -----
@@ -577,12 +343,16 @@ export function getEvidenceForTrend(trendId: string): EvidenceLink[] {
   return globalThis.__mockRepoState!.evidences.filter((e) => e.trendId === trendId);
 }
 
-export function addEvidence(e: EvidenceLink): void {
+export function addEvidence(evidence: EvidenceLink[]): void {
   const current = globalThis.__mockRepoState!.evidences;
-  const exists = current.some(existing => existing.id === e.id);
-  if (!exists) {
-    current.push(e);
+  const evArray = Array.isArray(evidence) ? evidence : (evidence ? [evidence as any] : []);
+  for (const e of evArray) {
+    const exists = current.some(existing => existing.id === e.id);
+    if (!exists) {
+      current.push(e);
+    }
   }
+  persistState();
 }
 
 // ==========================================
@@ -598,6 +368,12 @@ export function saveMonitoringRule(rule: MonitoringRule): void {
   const idx = current.findIndex(r => r.id === rule.id);
   if (idx !== -1) current[idx] = rule;
   else current.push(rule);
+  persistState();
+}
+
+export function deleteMonitoringRule(ruleId: string): void {
+  globalThis.__mockRepoState!.rules = globalThis.__mockRepoState!.rules.filter(r => r.id !== ruleId);
+  persistState();
 }
 
 export function updateMonitoringRule(ruleId: string, patch: Partial<MonitoringRule>): void {
@@ -605,6 +381,7 @@ export function updateMonitoringRule(ruleId: string, patch: Partial<MonitoringRu
   if (idx !== -1) {
     globalThis.__mockRepoState!.rules[idx] = { ...globalThis.__mockRepoState!.rules[idx], ...patch } as MonitoringRule;
   }
+  persistState();
 }
 
 export function getMonitoringRuns(): MonitoringRun[] {
@@ -616,6 +393,7 @@ export function saveMonitoringRun(run: MonitoringRun): void {
   const idx = current.findIndex(r => r.id === run.id);
   if (idx !== -1) current[idx] = run;
   else current.push(run);
+  persistState();
 }
 
 export function updateMonitoringRun(runId: string, patch: Partial<MonitoringRun>): void {
@@ -623,6 +401,7 @@ export function updateMonitoringRun(runId: string, patch: Partial<MonitoringRun>
   if (idx !== -1) {
     globalThis.__mockRepoState!.runs[idx] = { ...globalThis.__mockRepoState!.runs[idx], ...patch } as MonitoringRun;
   }
+  persistState();
 }
 
 export function getSourceSnapshots(sourceId: string): SourceSnapshot[] {
@@ -634,6 +413,7 @@ export function saveSourceSnapshot(snapshot: SourceSnapshot): void {
   const idx = current.findIndex(s => s.id === snapshot.id);
   if (idx !== -1) current[idx] = snapshot;
   else current.push(snapshot);
+  persistState();
 }
 
 export function getChangeEvents(): ChangeEvent[] {
@@ -642,6 +422,7 @@ export function getChangeEvents(): ChangeEvent[] {
 
 export function saveChangeEvents(events: ChangeEvent[]): void {
   globalThis.__mockRepoState!.changeEvents.push(...events);
+  persistState();
 }
 
 export function getTrendScoreSnapshots(trendId: string): TrendScoreSnapshot[] {
@@ -653,6 +434,7 @@ export function saveTrendScoreSnapshot(snapshot: TrendScoreSnapshot): void {
   const idx = current.findIndex(s => s.id === snapshot.id);
   if (idx !== -1) current[idx] = snapshot;
   else current.push(snapshot);
+  persistState();
 }
 
 export function getTrendScoreChanges(trendId: string): TrendScoreChange[] {
@@ -664,6 +446,7 @@ export function saveTrendScoreChange(change: TrendScoreChange): void {
   const idx = current.findIndex(c => c.id === change.id);
   if (idx !== -1) current[idx] = change;
   else current.push(change);
+  persistState();
 }
 
 export function getAlerts(): Alert[] {
@@ -672,6 +455,7 @@ export function getAlerts(): Alert[] {
 
 export function saveAlerts(alerts: Alert[]): void {
   globalThis.__mockRepoState!.alerts.push(...alerts);
+  persistState();
 }
 
 export function acknowledgeAlert(alertId: string): void {
@@ -679,6 +463,7 @@ export function acknowledgeAlert(alertId: string): void {
   if (idx !== -1) {
     globalThis.__mockRepoState!.alerts[idx] = { ...globalThis.__mockRepoState!.alerts[idx], acknowledged: true };
   }
+  persistState();
 }
 
 export function getWhatChangedSummaries(): WhatChangedSummary[] {
@@ -690,6 +475,7 @@ export function saveWhatChangedSummary(summary: WhatChangedSummary): void {
   const idx = current.findIndex(s => s.id === summary.id);
   if (idx !== -1) current[idx] = summary;
   else current.push(summary);
+  persistState();
 }
 
 export type { SourceStatus, TrendStatus };
@@ -704,6 +490,7 @@ export function getStrategicContext(): StrategicContext | null {
 
 export function saveStrategicContext(ctx: StrategicContext): void {
   globalThis.__mockRepoState!.strategicContext = ctx;
+  persistState();
 }
 
 export function getAssumptions(): Assumption[] {
@@ -717,12 +504,14 @@ export function saveAssumptions(items: Assumption[]): void {
     if (idx !== -1) current[idx] = item;
     else current.push(item);
   });
+  persistState();
 }
 
 export function updateAssumption(id: string, patch: Partial<Assumption>): void {
   const list = globalThis.__mockRepoState!.assumptions;
   const idx = list.findIndex(a => a.id === id);
   if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+  persistState();
 }
 
 export function getLeadingIndicators(): LeadingIndicator[] {
@@ -736,12 +525,14 @@ export function saveLeadingIndicators(items: LeadingIndicator[]): void {
     if (idx !== -1) current[idx] = item;
     else current.push(item);
   });
+  persistState();
 }
 
 export function updateLeadingIndicator(id: string, patch: Partial<LeadingIndicator>): void {
   const list = globalThis.__mockRepoState!.leadingIndicators;
   const idx = list.findIndex(li => li.id === id);
   if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+  persistState();
 }
 
 export function getStrategicImplications(): StrategicImplication[] {
@@ -755,6 +546,7 @@ export function saveStrategicImplications(items: StrategicImplication[]): void {
     if (idx !== -1) current[idx] = item;
     else current.push(item);
   });
+  persistState();
 }
 
 export function getScenarios(): Scenario[] {
@@ -768,6 +560,7 @@ export function saveScenarios(items: Scenario[]): void {
     if (idx !== -1) current[idx] = item;
     else current.push(item);
   });
+  persistState();
 }
 
 export function getStrategicOptions(): StrategicOption[] {
@@ -781,12 +574,14 @@ export function saveStrategicOptions(items: StrategicOption[]): void {
     if (idx !== -1) current[idx] = item;
     else current.push(item);
   });
+  persistState();
 }
 
 export function updateStrategicOption(id: string, patch: Partial<StrategicOption>): void {
   const list = globalThis.__mockRepoState!.strategicOptions;
   const idx = list.findIndex(o => o.id === id);
   if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+  persistState();
 }
 
 export function getDecisionBriefs(): DecisionBrief[] {
@@ -798,6 +593,7 @@ export function saveDecisionBrief(brief: DecisionBrief): void {
   const idx = list.findIndex(b => b.id === brief.id);
   if (idx !== -1) list[idx] = brief;
   else list.push(brief);
+  persistState();
 }
 
 export function getRoadmapItems(): RoadmapItem[] {
@@ -811,10 +607,39 @@ export function saveRoadmapItems(items: RoadmapItem[]): void {
     if (idx !== -1) current[idx] = item;
     else current.push(item);
   });
+  persistState();
 }
 
 export function updateRoadmapItem(id: string, patch: Partial<RoadmapItem>): void {
   const list = globalThis.__mockRepoState!.roadmapItems;
   const idx = list.findIndex(r => r.id === id);
   if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+  persistState();
 }
+
+export function deleteSource(id: string): void {
+  globalThis.__mockRepoState!.sources = globalThis.__mockRepoState!.sources.filter((s) => s.id !== id);
+  persistState();
+}
+
+export function saveSources(sources: any[]): void {
+  globalThis.__mockRepoState!.sources = sources;
+  persistState();
+}
+
+export function saveDocuments(documents: any[]): void {
+  globalThis.__mockRepoState!.documents = documents;
+  persistState();
+}
+
+export function getAgentActivities(): any[] { return globalThis.__mockRepoState?.activities || []; }
+export function logAgentActivity(activity: any): void {
+  if (!globalThis.__mockRepoState!.activities) globalThis.__mockRepoState!.activities = [];
+  globalThis.__mockRepoState!.activities.push(activity);
+}
+export function getPredictions(): any[] { return []; }
+export function savePrediction(_prediction: any): void {}
+export function getDebates(): any[] { return []; }
+export function saveDebate(_debate: any): void {}
+export function addKGNode(_node: any): void {}
+export function addKGEdge(_edge: any): void {}

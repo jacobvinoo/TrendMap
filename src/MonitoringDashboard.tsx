@@ -1,26 +1,47 @@
 
-import { useState } from 'react'; 
-import { getMonitoringRules, getWhatChangedSummaries, getMonitoringRuns } from './mockRepository';
-import { runMonitoringRule } from './monitoringRun';
+import { useState, useEffect } from 'react'; 
+import { repository } from './repository';
 import type { MonitoringRule, WhatChangedSummary, MonitoringRun } from './types'; 
 
 export default function MonitoringDashboard() {
-  const [rules] = useState<MonitoringRule[]>(getMonitoringRules().filter(r => r.enabled));
-  const [summaries, setSummaries] = useState<WhatChangedSummary[]>(getWhatChangedSummaries());
-  const [runs, setRuns] = useState<MonitoringRun[]>(getMonitoringRuns());
+  const [rules, setRules] = useState<MonitoringRule[]>([]);
+  const [summaries, setSummaries] = useState<WhatChangedSummary[]>([]);
+  const [runs, setRuns] = useState<MonitoringRun[]>([]);
   const [isRunning, setIsRunning] = useState<string | null>(null);
   const [scenario, setScenario] = useState<'baseline' | 'new_activity' | 'contradictory_activity'>('new_activity');
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const [fetchedRules, fetchedSummaries, fetchedRuns] = await Promise.all([
+        repository.getMonitoringRules(),
+        repository.getWhatChangedSummaries(),
+        repository.getMonitoringRuns()
+      ]);
+      setRules(fetchedRules.filter(r => r.enabled));
+      setSummaries(fetchedSummaries);
+      setRuns(fetchedRuns);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const handleRun = async (ruleId: string) => {
     setIsRunning(ruleId);
     try {
-      await runMonitoringRule(ruleId, scenario);
-      setSummaries(getWhatChangedSummaries());
-      setRuns(getMonitoringRuns());
+      await repository.runMonitoringRule(ruleId, scenario);
+      await loadData();
     } finally {
       setIsRunning(null);
     }
   };
+
+  if (loading) return <div className="p-8">Loading dashboard...</div>;
+
 
   const latestSummary = summaries.length > 0 ? summaries[summaries.length - 1] : null;
   const latestRun = runs.length > 0 ? runs[runs.length - 1] : null;

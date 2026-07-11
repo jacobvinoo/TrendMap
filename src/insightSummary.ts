@@ -9,7 +9,7 @@ import type { Trend, InsightSummary } from './types';
  * - emergingRisks: trends that have any blockers.
  * - opportunities: trends that have any recommendedActions.
  */
-export function generateInsightSummary(allTrends: Trend[], industryProfileId: string = 'default'): InsightSummary {
+export function generateInsightSummary(allTrends: Trend[], industryProfileId: string = 'default', aiSummary: string = ''): InsightSummary {
   const now = new Date().toISOString();
   // Filter only approved trends (exclude rejected and candidate)
   const approvedTrends = allTrends.filter((t) => t.status === 'approved');
@@ -40,6 +40,7 @@ export function generateInsightSummary(allTrends: Trend[], industryProfileId: st
     id: summaryId,
     industryProfileId,
     generatedAt: now,
+    aiSummary,
     keyTrends,
     watchItems,
     emergingRisks,

@@ -1,7 +1,9 @@
 import { 
   getTrends, getStrategicContext,
+  getAssumptions, getLeadingIndicators, getStrategicImplications,
+  getScenarios, getStrategicOptions, getDecisionBriefs, getRoadmapItems,
   saveAssumptions, saveLeadingIndicators, saveStrategicImplications,
-  saveScenarios, saveStrategicOptions, saveDecisionBrief, saveRoadmapItems 
+  saveScenarios, saveStrategicOptions, saveDecisionBrief, saveRoadmapItems, getSignals, getEvidences
 } from './mockRepository';
 import { generateAssumptionsFromTrends } from './assumptionEngine';
 import { generateLeadingIndicators } from './indicatorEngine';
@@ -15,14 +17,25 @@ export function seedPhase3() {
   const trends = getTrends();
   const context = getStrategicContext();
   if (!context || trends.length === 0) return;
+  if (
+    getAssumptions().length > 0 ||
+    getLeadingIndicators().length > 0 ||
+    getStrategicImplications().length > 0 ||
+    getScenarios().length > 0 ||
+    getStrategicOptions().length > 0 ||
+    getDecisionBriefs().length > 0 ||
+    getRoadmapItems().length > 0
+  ) {
+    return;
+  }
 
   const assumptions = generateAssumptionsFromTrends(trends, context);
   saveAssumptions(assumptions);
 
-  const indicators = generateLeadingIndicators(assumptions);
+  const indicators = generateLeadingIndicators(assumptions, getSignals());
   saveLeadingIndicators(indicators);
 
-  const implications = generateStrategicImplications(trends, context);
+  const implications = generateStrategicImplications(trends, context, getEvidences());
   saveStrategicImplications(implications);
 
   const scenarios = generateScenarios(implications, assumptions, indicators, context);

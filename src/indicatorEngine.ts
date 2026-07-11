@@ -4,7 +4,6 @@
  * Maps each assumption type to relevant indicator types and monitoring questions.
  */
 
-import { getSignals } from './mockRepository';
 import type { Assumption, LeadingIndicator, AssumptionType, IndicatorType, Signal } from './types';
 
 interface IndicatorTemplate {
@@ -104,10 +103,10 @@ const TYPE_MAP: Record<AssumptionType, IndicatorTemplate[]> = {
 
 export function generateLeadingIndicators(
   assumptions: Assumption[],
-  allSignals?: Signal[]
+  allSignals: Signal[] = []
 ): LeadingIndicator[] {
   const indicators: LeadingIndicator[] = [];
-  const signals = allSignals ?? getSignals();
+  const signals = allSignals;
 
   for (const assumption of assumptions) {
     const templates = TYPE_MAP[assumption.assumptionType] ?? [];

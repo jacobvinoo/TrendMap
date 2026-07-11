@@ -2,11 +2,8 @@
  * ImplicationsScreen (Step 10) — Opportunity and Threat dashboard
  * Shows all strategic implications grouped by type with priority indicators.
  */
-import { useState } from 'react';
-import {
-  getStrategicImplications, saveStrategicImplications,
-  getTrends, getStrategicContext,
-} from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateStrategicImplications } from './implicationEngine';
 import type { StrategicImplication, ImplicationType } from './types';
 
@@ -28,19 +25,39 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
 }
 
 export default function ImplicationsScreen() {
-  const [implications, setImplications] = useState<StrategicImplication[]>(() => getStrategicImplications());
+  const [implications, setImplications] = useState<StrategicImplication[]>([]);
   const [filter, setFilter] = useState<ImplicationType | 'all'>('all');
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setImplications(getStrategicImplications());
+  const loadData = async () => {
+    try {
+      const data = await repository.getStrategicImplications();
+      setImplications(data);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleGenerate = () => {
-    const trends = getTrends();
-    const ctx = getStrategicContext();
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refresh = async () => {
+    await loadData();
+  };
+
+  const handleGenerate = async () => {
+    const [trends, ctx] = await Promise.all([
+      repository.getTrends(),
+      repository.getStrategicContext()
+    ]);
     if (!ctx) return;
     const generated = generateStrategicImplications(trends, ctx);
-    saveStrategicImplications(generated);
-    refresh();
+    await repository.saveStrategicImplications(generated);
+    await refresh();
   };
+
+  if (loading) return <div className="p-8">Loading implications...</div>;
 
   const filtered = filter === 'all' ? implications : implications.filter(si => si.implicationType === filter);
   const sorted = [...filtered].sort((a, b) => (b.urgencyScore + b.impactScore) - (a.urgencyScore + a.impactScore));

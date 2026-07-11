@@ -16,21 +16,82 @@ export interface Source {
   name: string;
   url: string;
   sourceType: string;
+  source_type?: string;
   credibilityScore: number; // 0-1
   relevanceScore: number; // 0-1
   freshnessScore: number; // 0-1
   status: SourceStatus;
   notes: string;
+  retrievedAt?: string;
+  retrieved_at?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
+export type TrendThemeStatus = 'suggested' | 'approved' | 'rejected';
+export interface TrendTheme {
+  id: string;
+  industryId?: string;
+  industry_id?: string;
+  name: string;
+  description: string;
+  keywords: string[];
+  status: TrendThemeStatus;
+  origin: 'agent' | 'manual' | 'pipeline' | string;
+  evidenceSummary?: string;
+  evidence_summary?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
+export interface NewsSnippet {
+  id: string;
+  runId?: string;
+  sourceId?: string;
+  title: string;
+  url: string;
+  publisher: string;
+  publisherUrl: string;
+  snippet: string;
+  relevanceScore: number;
+  status: string;
+  publishedAt?: string;
+  createdAt?: string;
+}
+
+export interface NewsScanRun {
+  id: string;
+  industry?: string;
+  status: string;
+  query?: string;
+  startedAt?: string;
+  completedAt?: string;
+  scannedCount: number;
+  matchedCount: number;
+  createdSourceCount: number;
+  summary?: string;
+  errorSummary?: string;
+}
+
+export interface NewsScanResult {
+  run: NewsScanRun;
+  snippets: NewsSnippet[];
+  sourcesCreated: number;
 }
 
 export interface Document {
   id: string;
   sourceId: string;
+  extractionRunId?: string;
   title: string;
   publishedDate: string; // ISO date
   content: string;
   url: string;
-  ingestionStatus: string;
+  ingestionStatus: 'raw' | 'processed' | 'error' | 'extracted' | string;
   extractedSignalIds: string[];
 }
 
@@ -38,6 +99,7 @@ export interface Signal {
   id: string;
   documentId: string;
   sourceId: string;
+  extractionRunId?: string;
   title: string;
   summary: string;
   signalType: string;
@@ -49,11 +111,24 @@ export interface Signal {
   momentumScore?: number; // 0-1
   evidenceDate: string; // ISO date
   tags: string[];
+  created_at?: string; // ISO date
+  logs?: { date: string; message: string }[];
+}
+
+export interface AuditEvent {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  user_id: string;
+  details: string; // JSON string
+  created_at: string;
 }
 
 export type TrendStatus = 'candidate' | 'approved' | 'rejected' | 'needs_review';
 export interface Trend {
   id: string;
+  extractionRunId?: string;
   name: string;
   summary: string;
   status: TrendStatus;
@@ -72,6 +147,7 @@ export interface Trend {
   recommendedActions: string[];
   createdAt: string; // ISO date
   updatedAt: string; // ISO date
+  logs?: { date: string; message: string }[];
 }
 
 export interface EvidenceLink {
@@ -89,6 +165,7 @@ export interface InsightSummary {
   id: string;
   industryProfileId: string;
   generatedAt: string; // ISO timestamp
+  aiSummary: string;
   keyTrends: Trend[];
   watchItems: Trend[];
   emergingRisks: Trend[];
@@ -380,4 +457,193 @@ export interface RoadmapItem {
   status: RoadmapStatus;
   successMetric: string;
   linkedIndicatorIds: string[];
+}
+
+// ==============================
+// Phase 4 Types (Multi-Agent)
+// ==============================
+
+export type AgentRole = 'DiscoveryAgent' | 'ValidationAgent' | 'PredictionAgent' | 'ExecutiveAgent' | 'RecommendationAgent' | 'SignalAnalysisAgent' | 'KnowledgeGraphAgent' | 'LearningAgent' | 'MonitoringAgent' | 'IndustryIntelligenceAgent';
+
+export interface AgentActivity {
+  id: string;
+  agentRole: AgentRole;
+  taskType: string;
+  status: 'running' | 'completed' | 'failed';
+  message: string;
+  timestamp: string;
+  relatedEntityId?: string;
+}
+
+export interface Prediction {
+  id: string;
+  trendId: string;
+  predictionStatement: string;
+  targetDate?: string;
+  impact?: string;
+  confidenceScore?: number; // 0-1
+  assumptions?: string; // string or string[] depending on parsing
+  indicators?: string;
+  evidenceIds?: string;
+  status?: 'active' | 'resolved' | 'invalidated';
+  timestamp: string;
+}
+
+export interface PredictionUpdate {
+  id: string;
+  predictionId: string;
+  updateText: string;
+  confidenceShift?: number;
+  timestamp: string;
+}
+
+export interface PredictionOutcome {
+  id: string;
+  predictionId: string;
+  resolution: string;
+  accuracyScore?: number;
+  lessonsLearned?: string;
+  timestamp: string;
+}
+
+export interface DebateMessage {
+  id: string;
+  debateId: string;
+  agentRole: AgentRole;
+  content: string;
+  timestamp: string;
+}
+
+export interface AgentDebate {
+  id: string;
+  topic: string;
+  trendId?: string;
+  status: 'active' | 'consensus_reached' | 'stalled';
+  messages: DebateMessage[];
+  consensusSummary?: string;
+  confidenceDelta?: number;
+  timestamp: string;
+}
+
+export type KnowledgeNodeType = 'Trend' | 'Technology' | 'Company' | 'Investment' | 'Product' | 'Capability' | 'Evidence';
+export type KnowledgeEdgeType = 'depends_on' | 'enabled_by' | 'accelerated_by' | 'launched' | 'supports' | 'contradicts' | 'requires' | 'validated_by';
+
+export interface KGNode {
+  entity_id: string;
+  label: string;
+  node_type: KnowledgeNodeType;
+  summary?: string;
+  confidence_score?: number; // 0-1
+  evidence_ids?: string; // JSON string array or actual string depending on parsing
+  properties?: Record<string, any> | string;
+}
+
+export interface KGEdge {
+  id: string;
+  source_id: string;
+  target_id: string;
+  relationship_type: KnowledgeEdgeType;
+  confidence_score?: number; // 0-1
+  evidence_ids?: string;
+  properties?: Record<string, any> | string;
+}
+
+export interface KnowledgeGraph {
+  nodes: KGNode[];
+  edges: KGEdge[];
+}
+
+export interface SemanticSearchResult {
+  entityType: string;
+  entityId: string;
+  relevanceScore: number;
+  evidenceSnippet: string;
+  metadata: Record<string, any>;
+}
+
+export interface DataOperationRecord {
+  id: string;
+  operationType: 'import' | 'export' | string;
+  entityType: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | string;
+  fileUrl?: string;
+  errorMessage?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface DataExportResult {
+  export: DataOperationRecord;
+  payload: Record<string, any>;
+}
+
+export interface DataImportResult {
+  importRecord: DataOperationRecord;
+  importedCount: number;
+  entityIds: string[];
+  message?: string;
+  errors?: string[];
+}
+
+export interface DataHealthIssue {
+  severity: 'warning' | 'error' | string;
+  entityType: string;
+  entityId?: string;
+  message: string;
+}
+
+export interface DataHealthSummary {
+  status: 'healthy' | 'degraded' | string;
+  checksRun: number;
+  issueCount: number;
+  issues: DataHealthIssue[];
+  latestChecks: Array<{
+    id: string;
+    component: string;
+    status: string;
+    latencyMs?: number;
+    details?: string;
+    timestamp: string;
+  }>;
+}
+
+export interface DataClearResult {
+  status: 'cleared' | string;
+  deletedCounts: Record<string, number>;
+  message: string;
+}
+
+export interface KnowledgeGraphBuildResult {
+  trendId: string;
+  nodesCreated: number;
+  edgesCreated: number;
+  nodeIds: string[];
+  edgeIds: string[];
+}
+
+export interface KnowledgeGraphNeighborhood {
+  centerEntityId: string;
+  depth: number;
+  nodes: KGNode[];
+  edges: KGEdge[];
+}
+
+export interface SourceReliabilityResult {
+  sourceId: string;
+  reliabilityScore: number;
+  credibilityScore: number;
+  relevanceScore: number;
+  freshnessScore: number;
+  evidenceCount: number;
+  documentCount: number;
+  rationale: string[];
+}
+
+export interface ForecastCalibrationResult {
+  predictionId?: string;
+  evaluatedPredictions: number;
+  averageConfidence: number;
+  averageAccuracy: number;
+  calibrationError: number;
+  recommendation: string;
 }

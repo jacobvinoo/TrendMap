@@ -37,6 +37,9 @@ describe('Monitoring Run Orchestrator', () => {
       strategicOptions: [],
       decisionBriefs: [],
       roadmapItems: [],
+      
+      
+      knowledgeGraph: { nodes: [], edges: [] },
     };
     saveIndustryProfile({ id: 'ind-1', name: 'Mock Ind' } as any);
   });

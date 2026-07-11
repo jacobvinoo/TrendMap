@@ -3,16 +3,19 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import InsightsScreen from './InsightsScreen';
-import { getTrends } from './mockRepository';
+import { repository } from './repository';
 import type { Trend } from './types';
 
 // Mock the repository module
-vi.mock('./mockRepository', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./mockRepository')>();
+vi.mock('./repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./repository')>();
   return {
     ...actual,
-    getTrends: vi.fn(),
-    getIndustryProfile: vi.fn(() => ({ })),
+    repository: {
+      getTrends: vi.fn(),
+      getIndustryProfile: vi.fn(() => ({ })),
+      getInsightSummary: vi.fn(),
+    }
   };
 });
 
@@ -21,7 +24,7 @@ describe('Phase 1 Regression: InsightsScreen', () => {
     vi.clearAllMocks();
   });
 
-  it('renders only approved trends in the Insights Summary, excluding rejected or candidate trends', () => {
+  it('renders only approved trends in the Insights Summary, excluding rejected or candidate trends', async () => {
     const mockTrends: Trend[] = [
       { id: 't1', name: 'Approved Trend', 
         summary: 'This should appear',
@@ -61,12 +64,21 @@ describe('Phase 1 Regression: InsightsScreen', () => {
       }
     ];
 
-    vi.mocked(getTrends).mockReturnValue(mockTrends);
+    vi.mocked(repository.getInsightSummary).mockResolvedValue({
+      id: 'summary-1',
+      industryProfileId: 'profile-1',
+      generatedAt: '2025-01-01',
+      aiSummary: '',
+      keyTrends: [mockTrends[0]],
+      watchItems: [],
+      emergingRisks: [],
+      opportunities: []
+    } as any);
 
     render(<InsightsScreen />);
 
     // Approved trend should be visible
-    expect(screen.getByText('Approved Trend')).toBeInTheDocument();
+    expect(await screen.findByText('Approved Trend')).toBeInTheDocument();
     
     // Rejected and candidate should not
     expect(screen.queryByText('Rejected Trend')).not.toBeInTheDocument();

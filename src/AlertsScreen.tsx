@@ -1,16 +1,32 @@
 
-import { useState } from 'react'; 
-import { getAlerts, acknowledgeAlert } from './mockRepository'; 
+import { useState, useEffect } from 'react'; 
+import { repository } from './repository'; 
 import type { Alert } from './types'; 
 
 export default function AlertsScreen() {
-  const [alerts, setAlerts] = useState<Alert[]>(getAlerts());
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
 
-  const handleAcknowledge = (alert: Alert) => {
-    acknowledgeAlert(alert.id);
-    setAlerts(getAlerts());
+  const loadData = async () => {
+    try {
+      const fetched = await repository.getAlerts();
+      setAlerts(fetched);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleAcknowledge = async (alert: Alert) => {
+    await repository.acknowledgeAlert(alert.id);
+    await loadData();
+  };
+
+  if (loading) return <div className="p-8">Loading alerts...</div>;
 
   const filteredAlerts = alerts.filter(a => filterSeverity === 'all' || a.severity === filterSeverity);
 

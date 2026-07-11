@@ -1,14 +1,7 @@
-import { useState } from 'react';
-import { 
-  getStrategicContext, 
-  saveStrategicContext,
-  getStrategicImplications,
-  getStrategicOptions,
-  getAssumptions,
-  getLeadingIndicators
-} from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateDecisionBrief } from './decisionBriefEngine';
-import type { StrategicContext, RiskAppetite } from './types';
+import type { StrategicContext, RiskAppetite, StrategicImplication, StrategicOption, Assumption, LeadingIndicator } from './types';
 
 const DEFAULT_CONTEXT: StrategicContext = {
   id: 'ctx-woolworths-nz',
@@ -41,6 +34,34 @@ const DEFAULT_CONTEXT: StrategicContext = {
   riskAppetite: 'medium',
   planningHorizons: ['3 months', '6 months', '12 months', '24 months'],
 };
+
+function normalizeList(value: unknown, fallback: string[] = []): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      return value.trim() ? [value] : fallback;
+    }
+  }
+  return fallback;
+}
+
+function normalizeStrategicContext(context: Partial<StrategicContext> | any): StrategicContext {
+  return {
+    id: String(context?.id || DEFAULT_CONTEXT.id),
+    industryProfileId: String(context?.industryProfileId ?? context?.industry_profile_id ?? DEFAULT_CONTEXT.industryProfileId),
+    companyName: String(context?.companyName ?? context?.company_name ?? DEFAULT_CONTEXT.companyName),
+    businessModel: String(context?.businessModel ?? context?.business_model ?? DEFAULT_CONTEXT.businessModel),
+    targetCustomers: normalizeList(context?.targetCustomers ?? context?.target_customers, DEFAULT_CONTEXT.targetCustomers),
+    strategicGoals: normalizeList(context?.strategicGoals ?? context?.strategic_goals, DEFAULT_CONTEXT.strategicGoals),
+    currentCapabilities: normalizeList(context?.currentCapabilities ?? context?.current_capabilities, DEFAULT_CONTEXT.currentCapabilities),
+    constraints: normalizeList(context?.constraints, DEFAULT_CONTEXT.constraints),
+    riskAppetite: (context?.riskAppetite ?? context?.risk_appetite ?? DEFAULT_CONTEXT.riskAppetite) as RiskAppetite,
+    planningHorizons: normalizeList(context?.planningHorizons ?? context?.planning_horizons, DEFAULT_CONTEXT.planningHorizons),
+  };
+}
 
 function ListEditor({
   label,
@@ -102,23 +123,60 @@ function ListEditor({
 }
 
 export default function StrategyScreen() {
-  const saved = getStrategicContext();
-  const init = saved ?? DEFAULT_CONTEXT;
-
+  const [init, setInit] = useState<StrategicContext>(DEFAULT_CONTEXT);
+  const [implications, setImplications] = useState<StrategicImplication[]>([]);
+  const [options, setOptions] = useState<StrategicOption[]>([]);
+  const [assumptions, setAssumptions] = useState<Assumption[]>([]);
+  const [indicators, setIndicators] = useState<LeadingIndicator[]>([]);
+  
   const [activeTab, setActiveTab] = useState<'dashboard' | 'context'>('dashboard');
 
-  const [companyName, setCompanyName] = useState(init.companyName);
-  const [businessModel, setBusinessModel] = useState(init.businessModel);
-  const [targetCustomers, setTargetCustomers] = useState(init.targetCustomers);
-  const [strategicGoals, setStrategicGoals] = useState(init.strategicGoals);
-  const [currentCapabilities, setCurrentCapabilities] = useState(init.currentCapabilities);
-  const [constraints, setConstraints] = useState(init.constraints);
-  const [riskAppetite, setRiskAppetite] = useState<RiskAppetite>(init.riskAppetite);
-  const [planningHorizons, setPlanningHorizons] = useState(init.planningHorizons);
+  const [companyName, setCompanyName] = useState(DEFAULT_CONTEXT.companyName);
+  const [businessModel, setBusinessModel] = useState(DEFAULT_CONTEXT.businessModel);
+  const [targetCustomers, setTargetCustomers] = useState(DEFAULT_CONTEXT.targetCustomers);
+  const [strategicGoals, setStrategicGoals] = useState(DEFAULT_CONTEXT.strategicGoals);
+  const [currentCapabilities, setCurrentCapabilities] = useState(DEFAULT_CONTEXT.currentCapabilities);
+  const [constraints, setConstraints] = useState(DEFAULT_CONTEXT.constraints);
+  const [riskAppetite, setRiskAppetite] = useState<RiskAppetite>(DEFAULT_CONTEXT.riskAppetite);
+  const [planningHorizons, setPlanningHorizons] = useState(DEFAULT_CONTEXT.planningHorizons);
   const [error, setError] = useState('');
   const [saved2, setSaved2] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = () => {
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [fetchedCtx, fetchedImpls, fetchedOptions, fetchedAssumptions, fetchedIndicators] = await Promise.all([
+          repository.getStrategicContext(),
+          repository.getStrategicImplications(),
+          repository.getStrategicOptions(),
+          repository.getAssumptions(),
+          repository.getLeadingIndicators()
+        ]);
+        
+        const context = normalizeStrategicContext(fetchedCtx ?? DEFAULT_CONTEXT);
+        setInit(context);
+        setCompanyName(context.companyName);
+        setBusinessModel(context.businessModel);
+        setTargetCustomers(context.targetCustomers);
+        setStrategicGoals(context.strategicGoals);
+        setCurrentCapabilities(context.currentCapabilities);
+        setConstraints(context.constraints);
+        setRiskAppetite(context.riskAppetite);
+        setPlanningHorizons(context.planningHorizons);
+
+        setImplications(fetchedImpls);
+        setOptions(fetchedOptions);
+        setAssumptions(fetchedAssumptions);
+        setIndicators(fetchedIndicators);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const handleSave = async () => {
     if (!companyName.trim()) {
       setError('Company name is required');
       return;
@@ -136,16 +194,12 @@ export default function StrategyScreen() {
       riskAppetite,
       planningHorizons,
     };
-    saveStrategicContext(ctx);
+    await repository.saveStrategicContext(ctx);
     setSaved2(true);
     setTimeout(() => setSaved2(false), 2000);
   };
 
-  // Phase 3 Dashboard data
-  const implications = getStrategicImplications();
-  const options = getStrategicOptions();
-  const assumptions = getAssumptions();
-  const indicators = getLeadingIndicators();
+  if (loading) return <div className="p-8">Loading strategy...</div>;
 
   const brief = generateDecisionBrief(init, implications, options, assumptions, indicators);
 

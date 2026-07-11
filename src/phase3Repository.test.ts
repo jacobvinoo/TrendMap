@@ -51,6 +51,9 @@ describe('Phase 3 Repository', () => {
       strategicOptions: [],
       decisionBriefs: [],
       roadmapItems: [],
+      
+      
+      knowledgeGraph: { nodes: [], edges: [] },
     };
   });
 

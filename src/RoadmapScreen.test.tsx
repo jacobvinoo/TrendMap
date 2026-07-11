@@ -1,12 +1,13 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-vi.mock('./mockRepository', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./mockRepository')>();
+vi.mock('./repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./repository')>();
   let items: any[] = [];
   let options: any[] = [];
   return {
     ...actual,
+    repository: {
     getRoadmapItems: vi.fn(() => [...items]),
     saveRoadmapItems: vi.fn((r: any[]) => { items = [...items, ...r]; }),
     updateRoadmapItem: vi.fn((id: string, patch: any) => {
@@ -14,11 +15,12 @@ vi.mock('./mockRepository', async (importOriginal) => {
       if (idx !== -1) items[idx] = { ...items[idx], ...patch };
     }),
     getStrategicOptions: vi.fn(() => [...options]),
+  },
     __set: (i: any[], o: any[]) => { items = i; options = o; },
   };
 });
 
-const { __set } = vi.mocked(await import('./mockRepository')) as any;
+const { __set } = vi.mocked(await import('./repository')) as any;
 
 import RoadmapScreen from './RoadmapScreen';
 
@@ -44,54 +46,54 @@ describe('RoadmapScreen', () => {
     __set([], []);
   });
 
-  it('renders the Strategic Roadmap heading', () => {
+  it('renders the Strategic Roadmap heading', async () => {
     render(<RoadmapScreen />);
-    expect(screen.getByRole('heading', { name: /strategic roadmap/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /strategic roadmap/i })).toBeInTheDocument();
   });
 
-  it('shows empty state when no roadmap items exist', () => {
+  it('shows empty state when no roadmap items exist', async () => {
     render(<RoadmapScreen />);
-    expect(screen.getByText(/no roadmap items/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no roadmap items/i)).toBeInTheDocument();
   });
 
-  it('shows a generate button', () => {
+  it('shows a generate button', async () => {
     render(<RoadmapScreen />);
-    expect(screen.getByRole('button', { name: /generate roadmap/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /generate roadmap/i })).toBeInTheDocument();
   });
 
-  it('renders roadmap items when they exist', () => {
+  it("renders roadmap items when they exist", async () => {
     __set([MOCK_ITEM], [MOCK_OPTION]);
     render(<RoadmapScreen />);
-    expect(screen.getByText(/pilot ai search/i)).toBeInTheDocument();
+    expect(await screen.findByText(/pilot ai search/i)).toBeInTheDocument();
   });
 
-  it('shows the Now horizon column', () => {
+  it('shows the Now horizon column', async () => {
     __set([MOCK_ITEM], [MOCK_OPTION]);
     render(<RoadmapScreen />);
-    expect(screen.getByText(/now/i)).toBeInTheDocument();
+    expect(await screen.findByText(/now/i)).toBeInTheDocument();
   });
 
-  it('shows the success metric for each item', () => {
+  it('shows the success metric for each item', async () => {
     __set([MOCK_ITEM], [MOCK_OPTION]);
     render(<RoadmapScreen />);
-    expect(screen.getByText(/validate: better conversion/i)).toBeInTheDocument();
+    expect(await screen.findByText(/validate: better conversion/i)).toBeInTheDocument();
   });
 
   it('user can update item status to in_progress', async () => {
     __set([MOCK_ITEM], [MOCK_OPTION]);
     render(<RoadmapScreen />);
-    const select = screen.getByRole('combobox', { name: /status for roadmap-opt-1/i });
+    const select = await screen.findByRole('combobox', { name: /status for roadmap-opt-1/i });
     fireEvent.change(select, { target: { value: 'in_progress' } });
-    const { updateRoadmapItem } = vi.mocked(await import('./mockRepository'));
-    expect(updateRoadmapItem).toHaveBeenCalledWith('roadmap-opt-1', { status: 'in_progress' });
+    const { repository: mockRepoObj } = vi.mocked(await import('./repository')) as any;
+    expect(mockRepoObj.updateRoadmapItem).toHaveBeenCalledWith('roadmap-opt-1', { status: 'in_progress' });
   });
 
-  it('shows Next and Later horizon columns', () => {
+  it('shows Next and Later horizon columns', async () => {
     const nextItem = { ...MOCK_ITEM, id: 'roadmap-opt-2', horizon: 'next', title: 'Defend retail' };
     const laterItem = { ...MOCK_ITEM, id: 'roadmap-opt-3', horizon: 'later', title: 'Quantum pilot' };
     __set([MOCK_ITEM, nextItem, laterItem], []);
     render(<RoadmapScreen />);
-    expect(screen.getByText(/next/i)).toBeInTheDocument();
-    expect(screen.getByText(/later/i)).toBeInTheDocument();
+    expect(await screen.findByText(/next/i)).toBeInTheDocument();
+    expect(await screen.findByText(/later/i)).toBeInTheDocument();
   });
 });

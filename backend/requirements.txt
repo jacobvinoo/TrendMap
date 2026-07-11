@@ -1,0 +1,10 @@
+django
+djangorestframework
+pypdf
+pytest
+httpx
+psycopg2-binary
+openai
+instructor
+python-dotenv
+chromadb

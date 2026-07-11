@@ -4,32 +4,35 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'; 
 import userEvent from '@testing-library/user-event';
 import MonitoringScreen from './MonitoringScreen';
-import { getSources, saveMonitoringRule, getMonitoringRules, getIndustryProfile } from './mockRepository'; 
-import type { Source, MonitoringRule, IndustryProfile } from './types'; 
+import { repository } from './repository';
+import type { Source, MonitoringRule, IndustryProfile } from './types';
 
-vi.mock('./mockRepository', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./mockRepository')>();
+vi.mock('./repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./repository')>();
   let mockSources: Source[] = [];
   let mockRules: MonitoringRule[] = [];
   let mockProfile: IndustryProfile | null = { id: 'ind-1' } as any;
 
   return {
     ...actual,
-    getSources: vi.fn(() => mockSources),
+    repository: {
+      getSources: vi.fn(() => mockSources),
+      getMonitoringRules: vi.fn(() => [...mockRules]),
+      saveMonitoringRule: vi.fn((rule: MonitoringRule) => {
+        const idx = mockRules.findIndex(r => r.sourceId === rule.sourceId);
+        if (idx !== -1) mockRules[idx] = rule;
+        else mockRules.push(rule);
+      }),
+      getIndustryProfile: vi.fn(() => mockProfile),
+    },
     setMockSources: (sources: Source[]) => { mockSources = sources; },
-    getMonitoringRules: vi.fn(() => [...mockRules]),
     setMockRules: (rules: MonitoringRule[]) => { mockRules = [...rules]; },
-    saveMonitoringRule: vi.fn((rule: MonitoringRule) => {
-      const idx = mockRules.findIndex(r => r.sourceId === rule.sourceId);
-      if (idx !== -1) mockRules[idx] = rule;
-      else mockRules.push(rule);
-    }),
-    getIndustryProfile: vi.fn(() => mockProfile),
   };
 });
 
 // Utility to set mocks
-const { setMockSources, setMockRules } = vi.mocked(await import('./mockRepository')) as any;
+const { setMockSources, setMockRules, repository: mockRepoObj } = vi.mocked(await import('./repository')) as any;
+const saveMonitoringRule = mockRepoObj.saveMonitoringRule;
 
 describe('MonitoringScreen Component', () => {
   beforeEach(() => {
@@ -42,11 +45,11 @@ describe('MonitoringScreen Component', () => {
     setMockRules([]);
   });
 
-  it('shows approved sources as monitorable and excludes/disables rejected ones', () => {
+  it('shows approved sources as monitorable and excludes/disables rejected ones', async () => {
     render(<MonitoringScreen />);
     
     // Approved source should be in the list
-    expect(screen.getByText('Approved Source')).toBeInTheDocument();
+    expect(await screen.findByText('Approved Source')).toBeInTheDocument();
     
     // Rejected source should not appear as a monitorable source
     expect(screen.queryByText('Rejected Source')).not.toBeInTheDocument();
@@ -59,7 +62,7 @@ describe('MonitoringScreen Component', () => {
     render(<MonitoringScreen />);
     
     // Click "Enable Monitoring" for the approved source
-    const enableBtn = screen.getByRole('button', { name: /Enable Monitoring/i });
+    const enableBtn = await screen.findByRole('button', { name: /Enable Monitoring/i });
     fireEvent.click(enableBtn);
     
     expect(saveMonitoringRule).toHaveBeenCalled();
@@ -69,21 +72,21 @@ describe('MonitoringScreen Component', () => {
     expect(saveCall.frequency).toBe('weekly'); // Default
 
     // Should now show controls
-    const select = screen.getByRole('combobox', { name: /frequency/i });
+    const select = await screen.findByRole('combobox', { name: /frequency/i });
     fireEvent.change(select, { target: { value: 'daily' } });
     
     expect(saveMonitoringRule).toHaveBeenCalledTimes(2);
     expect(vi.mocked(saveMonitoringRule).mock.calls[1][0].frequency).toBe('daily');
 
     // Add a keyword
-    const keywordInput = screen.getByPlaceholderText(/add keyword/i);
+    const keywordInput = await screen.findByPlaceholderText(/add keyword/i);
     await userEvent.type(keywordInput, 'AI{enter}');
     
     expect(saveMonitoringRule).toHaveBeenCalledTimes(3);
     expect(vi.mocked(saveMonitoringRule).mock.calls[2][0].keywords).toContain('AI');
   });
 
-  it('allows disabling an active rule', () => {
+  it('allows disabling an active rule', async () => {
     setMockRules([
       {
         id: 'r1',
@@ -101,7 +104,7 @@ describe('MonitoringScreen Component', () => {
     
     render(<MonitoringScreen />);
     
-    const disableBtn = screen.getByRole('button', { name: /Disable Monitoring/i });
+    const disableBtn = await screen.findByRole('button', { name: /Disable Monitoring/i });
     fireEvent.click(disableBtn);
     
     expect(saveMonitoringRule).toHaveBeenCalled();

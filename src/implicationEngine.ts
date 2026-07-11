@@ -4,7 +4,6 @@
  * from approved trends and strategic context.
  */
 
-import { getEvidences } from './mockRepository';
 import type { Trend, StrategicContext, StrategicImplication, ImplicationType, EvidenceLink } from './types';
 
 function clamp(v: number): number {
@@ -85,11 +84,11 @@ const SPECS: ImplicationSpec[] = [
 export function generateStrategicImplications(
   trends: Trend[],
   context: StrategicContext,
-  allEvidences?: EvidenceLink[]
+  allEvidences: EvidenceLink[] = []
 ): StrategicImplication[] {
   const approved = trends.filter(t => t.status === 'approved');
   const implications: StrategicImplication[] = [];
-  const evidences = allEvidences ?? getEvidences();
+  const evidences = allEvidences;
 
   for (const trend of approved) {
     for (const spec of SPECS) {

@@ -1,3 +1,4 @@
+import { seedTestData } from "./testSeed";
 // @ts-nocheck
 
 /**
@@ -14,8 +15,8 @@
  */
 import { describe, test, expect, beforeEach } from 'vitest';
 import { validateTraceability } from './traceabilityValidation';
-import { resetMockData, clearDynamicData, saveTrends, saveSignals, addEvidence, updateSourceStatus } from './mockRepository';
-import type { Trend, Signal, EvidenceLink } from './types';
+import { resetMockData, clearDynamicData, saveTrends, saveSignals, addEvidence, updateSourceStatus, saveDocuments } from './mockRepository';
+import type { Document, Trend, Signal, EvidenceLink } from './types';
 
 function makeTrend(overrides: Partial<Trend> = {}): Trend {
   return { 
@@ -50,81 +51,99 @@ function makeEvidence(overrides: Partial<EvidenceLink> = {}): EvidenceLink {
   };
 }
 
-describe('Traceability health – integration', () => {
-  beforeEach(() => { resetMockData(); clearDynamicData(); });
+function saveTraceDocument(): void {
+  const document: Document = {
+    id: 'doc-1',
+    sourceId: 'src-1',
+    title: 'Trace document',
+    publishedDate: '2026-01-01',
+    content: 'Trace document content.',
+    url: 'https://example.com/trace',
+    ingestionStatus: 'raw',
+    extractedSignalIds: [],
+  };
+  saveDocuments([document]);
+}
 
-  test('no orphan links in clean data', () => {
+describe('Traceability health – integration', () => {
+  beforeEach(() => { resetMockData();
+    seedTestData(); clearDynamicData(); });
+
+  test('no orphan links in clean data', async () => {
     const trend = makeTrend();
     const signal = makeSignal();
     const evidence = makeEvidence();
+    saveTraceDocument();
     saveTrends([trend]);
     saveSignals([signal]);
     addEvidence(evidence);
 
-    const report = validateTraceability();
+    const report = await validateTraceability();
     expect(report).toHaveLength(0);
   });
 
-  test('orphan trend-signal link detected (signal missing)', () => {
+  test('orphan trend-signal link detected (signal missing)', async () => {
     // Trend references sig-missing which doesn't exist
     const trend = makeTrend({ relatedSignalIds: ['sig-missing'] });
     saveTrends([trend]);
     // No signal seeded
-    const report = validateTraceability();
+    const report = await validateTraceability();
     const orphan = report.find((r) => r.type === 'trend' && r.message.includes('sig-missing'));
     expect(orphan).toBeDefined();
   });
 
-  test('orphan signal-document link detected (document missing)', () => {
+  test('orphan signal-document link detected (document missing)', async () => {
     const signal = makeSignal({ documentId: 'doc-missing' });
     saveSignals([signal]);
-    const report = validateTraceability();
+    const report = await validateTraceability();
     const orphan = report.find((r) => r.type === 'signal' && r.message.includes('doc-missing'));
     expect(orphan).toBeDefined();
   });
 
-  test('orphan signal-source link detected (source missing)', () => {
+  test('orphan signal-source link detected (source missing)', async () => {
     const signal = makeSignal({ sourceId: 'src-missing' });
     saveSignals([signal]);
-    const report = validateTraceability();
+    const report = await validateTraceability();
     const orphan = report.find((r) => r.type === 'signal' && r.message.includes('src-missing'));
     expect(orphan).toBeDefined();
   });
 
-  test('evidence from rejected source is flagged', () => {
+  test('evidence from rejected source is flagged', async () => {
     const trend = makeTrend();
     const signal = makeSignal();
     const evidence = makeEvidence();
+    saveTraceDocument();
     saveTrends([trend]);
     saveSignals([signal]);
     addEvidence(evidence);
     // Reject the source after seeding evidence
     updateSourceStatus('src-1', 'rejected');
 
-    const report = validateTraceability();
+    const report = await validateTraceability();
     const rejectedFlag = report.find((r) => r.type === 'evidence' && r.message.includes('rejected source'));
     expect(rejectedFlag).toBeDefined();
   });
 
-  test('approved trend without evidence is flagged', () => {
+  test('approved trend without evidence is flagged', async () => {
     const trend = makeTrend({ relatedSignalIds: [] });
     saveTrends([trend]);
     // No evidence added
-    const report = validateTraceability();
+    const report = await validateTraceability();
     const noEvidence = report.find((r) => r.type === 'trend' && r.message.includes('no evidence'));
     expect(noEvidence).toBeDefined();
   });
 
-  test('complete chain Trend→Signal→Document→Source passes clean', () => {
+  test('complete chain Trend→Signal→Document→Source passes clean', async () => {
     const trend = makeTrend();
     const signal = makeSignal();
     const evidence = makeEvidence();
+    saveTraceDocument();
     saveTrends([trend]);
     saveSignals([signal]);
     addEvidence(evidence);
 
-    const report = validateTraceability();
-    // doc-1 → src-1 exists in seeded data; no orphans expected
+    const report = await validateTraceability();
+    // doc-1 → src-1 exists in test-created data; no orphans expected
     expect(report.filter((r) => r.type !== 'evidence' || !r.message.includes('rejected')))
       .toHaveLength(0);
   });

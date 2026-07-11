@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { getIndustryProfile, saveIndustryProfile } from './mockRepository';
+import { getRepositoryMode, repository } from './repository';
 import type { IndustryProfile } from './types';
-import { Plus, X, Save, CheckCircle2 } from 'lucide-react';
+import { Plus, X, Save, CheckCircle2, Compass } from 'lucide-react';
 
 const ListEditor: React.FC<{
   label: string;
@@ -25,7 +25,7 @@ const ListEditor: React.FC<{
     <div className="mb-4">
       <label className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
       <div className="flex flex-wrap gap-2 mb-3">
-        {items.map((it, idx) => (
+        {(items || []).map((it, idx) => (
           <span 
             key={idx}
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-gray-700 text-gray-200 border border-gray-600"
@@ -65,22 +65,93 @@ const ListEditor: React.FC<{
   );
 };
 
-const IndustrySetup: React.FC = () => {
-  const seeded = getIndustryProfile();
-  const [profile, setProfile] = useState<IndustryProfile>(
-    seeded ?? {
-      id: 'ind-1',
-      name: '',
-      geography: '',
-      description: '',
-      strategicPriorities: [],
-      customerSegments: [],
-      competitors: [],
-      timeHorizons: [],
+function normalizeProfile(profile: Partial<IndustryProfile> | any): IndustryProfile {
+  return {
+    id: String(profile?.id || 'ind-1'),
+    name: String(profile?.name || ''),
+    geography: String(profile?.geography || ''),
+    description: String(profile?.description || ''),
+    strategicPriorities: normalizeStringList(profile?.strategicPriorities ?? profile?.strategic_priorities),
+    customerSegments: normalizeStringList(profile?.customerSegments ?? profile?.customer_segments),
+    competitors: normalizeStringList(profile?.competitors),
+    timeHorizons: normalizeStringList(profile?.timeHorizons ?? profile?.time_horizons),
+  };
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      return value.split(',').map(part => part.trim()).filter(Boolean);
     }
-  );
+  }
+  return [];
+}
+
+const IndustrySetup: React.FC = () => {
+  const defaultProfile: IndustryProfile = {
+    id: 'ind-1',
+    name: '',
+    geography: '',
+    description: '',
+    strategicPriorities: [],
+    customerSegments: [],
+    competitors: [],
+    timeHorizons: [],
+  };
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<IndustryProfile>(defaultProfile);
   const [error, setError] = useState<string>('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isFindingSources, setIsFindingSources] = useState(false);
+  const [repositoryMode, setRepositoryMode] = useState<'api' | 'local' | 'unknown'>('unknown');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      setLoading(true);
+      setError('');
+      let loadWarning = '';
+
+      try {
+        const seeded = await repository.getIndustryProfile();
+        if (!cancelled && seeded) {
+          const normalized = normalizeProfile(seeded);
+          setProfile(normalized);
+        }
+      } catch (err) {
+        console.error("Error loading profile:", err);
+        loadWarning = 'Could not load the saved industry profile. The setup form is still available; save again once the database API is connected.';
+      }
+
+      try {
+        const mode = await getRepositoryMode();
+        if (!cancelled) {
+          setRepositoryMode(mode);
+        }
+      } catch (err) {
+        console.error("Error checking repository mode:", err);
+        if (!cancelled) {
+          setRepositoryMode('unknown');
+        }
+        loadWarning = loadWarning || 'Could not check the database connection. The setup form is still available.';
+      } finally {
+        if (!cancelled) {
+          if (loadWarning) setError(loadWarning);
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (showSuccess) {
@@ -94,26 +165,64 @@ const IndustrySetup: React.FC = () => {
   };
 
   const handleListAdd = (field: keyof IndustryProfile) => (value: string) => {
-    const arr = (profile[field] as string[]) ?? [];
+    const arr = Array.isArray(profile[field]) ? profile[field] as string[] : [];
     setProfile({ ...profile, [field]: [...arr, value] });
   };
 
   const handleListRemove = (field: keyof IndustryProfile) => (index: number) => {
-    const arr = (profile[field] as string[]) ?? [];
+    const arr = Array.isArray(profile[field]) ? profile[field] as string[] : [];
     const newArr = arr.filter((_, i) => i !== index);
     setProfile({ ...profile, [field]: newArr });
   };
 
-  const handleSave = (e?: FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
     if (!profile.name.trim()) {
-      setError('Industry name cannot be empty');
+      setError('Industry Name is required.');
       return;
     }
     setError('');
-    saveIndustryProfile(profile);
-    setShowSuccess(true);
+    
+    try {
+      const mode = await getRepositoryMode();
+      setRepositoryMode(mode);
+      await repository.saveIndustryProfile(profile);
+      setShowSuccess(true);
+      if (mode === 'local') {
+        setError('Saved in browser storage only because the database API is offline. Stop the current dev server and restart with npm run dev.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to save industry profile');
+    }
   };
+
+  const handleFindSources = async () => {
+    if (!profile.name.trim()) {
+      setError('Industry Name is required before identifying themes.');
+      return;
+    }
+
+    setError('');
+    setIsFindingSources(true);
+    try {
+      await repository.saveIndustryProfile(profile);
+      setShowSuccess(true);
+      if (typeof window !== 'undefined') {
+        window.location.hash = 'themes';
+      }
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : 'Please try again.';
+      setError(`Failed to continue to themes. ${message}`);
+    } finally {
+      setIsFindingSources(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-400">Loading industry profile...</div>;
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto w-full">
@@ -139,6 +248,17 @@ const IndustrySetup: React.FC = () => {
             <Save size={16} />
             Save Configuration
           </button>
+          
+          <button
+            type="button"
+            onClick={handleFindSources}
+            disabled={isFindingSources}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            title="Save this industry setup and identify trend themes"
+          >
+            <Compass size={16} />
+            {isFindingSources ? 'Saving...' : 'Next: Themes'}
+          </button>
         </div>
       </div>
 
@@ -149,6 +269,11 @@ const IndustrySetup: React.FC = () => {
       )}
 
       <form onSubmit={handleSave} className="space-y-6 mt-8">
+        {repositoryMode === 'local' && (
+          <div className="rounded-lg border border-amber-700 bg-amber-900/30 p-4 text-sm text-amber-100">
+            Database API is not connected. This screen is reading browser storage, so saved values will not appear in the backend database. Stop the current dev server and restart with npm run dev.
+          </div>
+        )}
         
         {/* Core Details Card */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 md:p-6 shadow-sm">

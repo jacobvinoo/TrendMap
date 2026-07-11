@@ -2,31 +2,47 @@
  * DecisionBriefScreen (Step 17)
  * Generates and displays the strategic decision brief.
  */
-import { useState } from 'react';
-import {
-  getDecisionBriefs, saveDecisionBrief,
-  getStrategicContext, getStrategicImplications,
-  getStrategicOptions, getAssumptions, getLeadingIndicators,
-} from './mockRepository';
+import { useState, useEffect } from 'react';
+import { repository } from './repository';
 import { generateDecisionBrief } from './decisionBriefEngine';
 import type { DecisionBrief } from './types';
 
 export default function DecisionBriefScreen() {
-  const [briefs, setBriefs] = useState<DecisionBrief[]>(() => getDecisionBriefs());
+  const [briefs, setBriefs] = useState<DecisionBrief[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setBriefs(getDecisionBriefs());
-
-  const handleGenerate = () => {
-    const ctx = getStrategicContext();
-    if (!ctx) return;
-    const implications = getStrategicImplications();
-    const options = getStrategicOptions();
-    const assumptions = getAssumptions();
-    const indicators = getLeadingIndicators();
-    const brief = generateDecisionBrief(ctx, implications, options, assumptions, indicators);
-    saveDecisionBrief(brief);
-    refresh();
+  const loadData = async () => {
+    try {
+      const fetched = await repository.getDecisionBriefs();
+      setBriefs(fetched);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refresh = async () => {
+    await loadData();
+  };
+
+  const handleGenerate = async () => {
+    const ctx = await repository.getStrategicContext();
+    if (!ctx) return;
+    const [implications, options, assumptions, indicators] = await Promise.all([
+      repository.getStrategicImplications(),
+      repository.getStrategicOptions(),
+      repository.getAssumptions(),
+      repository.getLeadingIndicators()
+    ]);
+    const brief = generateDecisionBrief(ctx, implications, options, assumptions, indicators);
+    await repository.saveDecisionBrief(brief);
+    await refresh();
+  };
+
+  if (loading) return <div className="p-8">Loading decision briefs...</div>;
 
   const latest = briefs.length > 0
     ? briefs.reduce((a, b) => (a.generatedAt > b.generatedAt ? a : b))

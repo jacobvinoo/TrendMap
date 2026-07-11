@@ -1,14 +1,11 @@
 
-import type { TrendScoreSnapshot } from './types'; 
-import { getTrendById, getTrendScoreSnapshots, saveTrendScoreSnapshot } from './mockRepository';
+import type { TrendScoreSnapshot, Trend } from './types'; 
 
-export function captureTrendScoreSnapshot(trendId: string): TrendScoreSnapshot | null {
-  const trend = getTrendById(trendId);
-  if (!trend) return null;
+export function generateTrendScoreSnapshot(trend: Trend): TrendScoreSnapshot {
 
   const snapshot = { 
 
-    id: `score-snap-${trendId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `score-snap-${trend.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     trendId: trend.id,
     capturedAt: new Date().toISOString(),
     likelihoodScore: trend.likelihoodScore ?? trend.confidenceScore,
@@ -23,12 +20,7 @@ export function captureTrendScoreSnapshot(trendId: string): TrendScoreSnapshot |
     reason: 'Periodic snapshot capture'
   };
 
-  saveTrendScoreSnapshot(snapshot);
   return snapshot;
 }
 
-export function getTrendHistory(trendId: string): TrendScoreSnapshot[] {
-  // Return history sorted by capturedAt ascending (oldest first)
-  const snapshots = getTrendScoreSnapshots(trendId);
-  return snapshots.sort((a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime());
-}
+

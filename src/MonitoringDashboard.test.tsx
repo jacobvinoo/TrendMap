@@ -3,32 +3,33 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'; 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MonitoringDashboard from './MonitoringDashboard';
-import { runMonitoringRule } from './monitoringRun';
 import type { MonitoringRule } from './types'; 
 
-vi.mock('./monitoringRun', () => ({
-  runMonitoringRule: vi.fn(async (ruleId: string, scenario: string) => { 
-    return { id: 'run-1', status: 'completed' };
-  })
-}));
 
-vi.mock('./mockRepository', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./mockRepository')>();
+
+vi.mock('./repository', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./repository')>();
   let mockRules: MonitoringRule[] = [];
   let mockSummaries: any[] = [];
   let mockRuns: any[] = [];
   return {
     ...actual,
-    getMonitoringRules: vi.fn(() => [...mockRules]),
-    getWhatChangedSummaries: vi.fn(() => [...mockSummaries]),
-    getMonitoringRuns: vi.fn(() => [...mockRuns]),
+    repository: {
+      ...actual.repository,
+      runMonitoringRule: vi.fn(async (ruleId: string) => { 
+        return { id: 'run-1', status: 'completed' };
+      }),
+      getMonitoringRules: vi.fn(() => [...mockRules]),
+      getWhatChangedSummaries: vi.fn(() => [...mockSummaries]),
+      getMonitoringRuns: vi.fn(() => [...mockRuns]),
+    },
     setMockRules: (rules: MonitoringRule[]) => { mockRules = rules; },
     setMockSummaries: (summaries: any[]) => { mockSummaries = summaries; },
     setMockRuns: (runs: any[]) => { mockRuns = runs; },
   };
 });
 
-const { setMockRules, setMockSummaries, setMockRuns } = vi.mocked(await import('./mockRepository')) as any;
+const { setMockRules, setMockSummaries, setMockRuns, repository } = vi.mocked(await import('./repository')) as any;
 
 describe('Monitoring Dashboard UI', () => {
   beforeEach(() => {
@@ -38,9 +39,9 @@ describe('Monitoring Dashboard UI', () => {
     setMockRuns([]);
   });
 
-  it('renders empty state when no active rules', () => {
+  it('renders empty state when no active rules', async () => {
     render(<MonitoringDashboard />);
-    expect(screen.getByText(/No active monitoring rules/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No active monitoring rules/i)).toBeInTheDocument();
   });
 
   it('renders active rules and allows running a manual scan', async () => {
@@ -49,30 +50,30 @@ describe('Monitoring Dashboard UI', () => {
     ]);
     
     render(<MonitoringDashboard />);
-    expect(screen.getByText(/Active Rule for Source: src1/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Active Rule for Source: src1/i)).toBeInTheDocument();
 
     const runBtn = screen.getByRole('button', { name: /Run Monitoring Now/i });
     fireEvent.click(runBtn);
 
-    expect(runMonitoringRule).toHaveBeenCalledWith('r1', 'new_activity');
+    expect(repository.runMonitoringRule).toHaveBeenCalledWith('r1', 'new_activity');
 
     await waitFor(() => {
       // It should display a running state or completion (our mock returns immediately)
-      expect(runMonitoringRule).toHaveBeenCalled();
+      expect(repository.runMonitoringRule).toHaveBeenCalled();
     });
   });
 
-  it('displays the latest What Changed Summary', () => {
+  it('displays the latest What Changed Summary', async () => {
     setMockSummaries([
       { id: 'sum1', monitoringRunId: 'run1', generatedAt: '2026-01-01', headline: 'Found 2 new signals', newSignals: [], changedTrends: [], newCandidateTrends: [], alerts: [], recommendedActions: ['Review trend X'] }
     ]);
 
     render(<MonitoringDashboard />);
-    expect(screen.getByText('Found 2 new signals')).toBeInTheDocument();
-    expect(screen.getByText('Review trend X')).toBeInTheDocument();
+    expect(await screen.findByText('Found 2 new signals')).toBeInTheDocument();
+    expect(await screen.findByText('Review trend X')).toBeInTheDocument();
   });
 
-  it('correctly tracks failed runs and explicitly displays them as red', () => {
+  it('correctly tracks failed runs and explicitly displays them as red', async () => {
     const failedTime = new Date('2026-02-01T12:00:00Z').toISOString();
     setMockRuns([
       { id: 'run-fail', status: 'failed', startedAt: failedTime }
@@ -81,12 +82,12 @@ describe('Monitoring Dashboard UI', () => {
     render(<MonitoringDashboard />);
     
     // System health should be 'failed' and explicitly styled red
-    const healthStatus = screen.getByText('failed');
+    const healthStatus = await screen.findByText('failed');
     expect(healthStatus).toBeInTheDocument();
     expect(healthStatus.className).toContain('text-red-400');
     
     // The "Last Run" tile should fallback correctly to startedAt when completedAt isn't available
     const timeString = new Date(failedTime).toLocaleTimeString();
-    expect(screen.getByText(timeString)).toBeInTheDocument();
+    expect(await screen.findByText(timeString)).toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import { seedTestData } from "../testSeed";
 // @ts-nocheck
 /**
  * Step 18 – Accessibility & usability validation
@@ -9,7 +10,7 @@
  * - Empty states have descriptive copy
  * - Cards are keyboard navigable
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { describe, test, expect, beforeEach } from 'vitest';
@@ -19,34 +20,36 @@ import SignalsScreen from '../SignalsScreen';
 import { resetMockData, clearDynamicData } from '../mockRepository';
 
 describe('Accessibility – forms have labels', () => {
-  beforeEach(() => { resetMockData(); clearDynamicData(); });
+  beforeEach(() => { resetMockData();
+    seedTestData(); clearDynamicData(); });
 
-  test('SourceLibrary note input has aria-label', () => {
+  test('SourceLibrary note input has aria-label', async () => {
     render(<SourceLibrary />);
-    const inputs = screen.getAllByLabelText(/add-note-/i);
+    const inputs = await screen.findAllByLabelText(/add-note-/i);
     expect(inputs.length).toBeGreaterThan(0);
   });
 
-  test('SignalsScreen PESTLE filter has label', () => {
+  test('SignalsScreen PESTLE filter has label', async () => {
     render(<SignalsScreen />);
-    const select = screen.getByLabelText(/pestle category/i);
+    const select = await screen.findByLabelText(/pestle category/i);
     expect(select).toBeInTheDocument();
   });
 
-  test('SignalsScreen min-confidence input has label', () => {
+  test('SignalsScreen min-confidence input has label', async () => {
     render(<SignalsScreen />);
-    const input = screen.getByLabelText(/min confidence/i);
+    const input = await screen.findByLabelText(/min confidence/i);
     expect(input).toBeInTheDocument();
   });
 });
 
 describe('Accessibility – status shown as text, not colour only', () => {
-  beforeEach(() => { resetMockData(); clearDynamicData(); });
+  beforeEach(() => { resetMockData();
+    seedTestData(); clearDynamicData(); });
 
-  test('SourceLibrary shows status as text ("suggested"/"approved"/"rejected")', () => {
+  test('SourceLibrary shows status as text ("suggested"/"approved"/"rejected")', async () => {
     render(<SourceLibrary />);
     // Initial state should show 'suggested' for all seeded sources
-    const statusTexts = screen.getAllByText(/suggested|approved|rejected/i);
+    const statusTexts = await screen.findAllByText(/suggested|approved|rejected/i);
     expect(statusTexts.length).toBeGreaterThan(0);
   });
 
@@ -54,7 +57,7 @@ describe('Accessibility – status shown as text, not colour only', () => {
 
     const { saveTrends, saveSignals, addEvidence } = await import('../mockRepository');
     saveTrends([{ 
-      id: 't1', name: 'Test Trend', summary: 'Summary', status: 'candidate',
+      id: 't1', name: 'Accessible Grocery Discovery', summary: 'Summary', status: 'candidate',
       horizon: '12-24 months', likelihoodScore: 0.7, confidenceScore: 0.8,
       impactScore: 0.6, maturityStage: 'emerging', relatedSignalIds: ['s1'],
       drivers: [], blockers: [], whatNeedsToBeTrue: [], leadingIndicators: [],
@@ -68,7 +71,7 @@ describe('Accessibility – status shown as text, not colour only', () => {
       strengthScore: 0.8, confidenceScore: 0.8,
       evidenceDate: '2026-01-01', tags: [],
     }]);
-    addEvidence({ id: 'ev1', trendId: 't1', signalId: 's1', documentId: 'doc-1', sourceId: 'src-1', quote: 'q', relevanceReason: 'r' });
+    addEvidence([{ id: 'ev1', trendId: 't1', signalId: 's1', documentId: 'doc-1', sourceId: 'src-1', quote: 'q', relevanceReason: 'r' }]);
     render(<TrendReviewBoard />);
     const statusEl = await screen.findByLabelText('trend-status');
     expect(statusEl).toHaveTextContent('candidate');
@@ -76,21 +79,24 @@ describe('Accessibility – status shown as text, not colour only', () => {
 });
 
 describe('Accessibility – score labels have text values', () => {
-  beforeEach(() => { resetMockData(); clearDynamicData(); });
+  beforeEach(() => { resetMockData();
+    seedTestData(); clearDynamicData(); });
 
-  test('SourceLibrary renders credibility as a percentage string', () => {
+  test('SourceLibrary renders credibility as a percentage string', async () => {
     render(<SourceLibrary />);
-    const credSpan = screen.getAllByTestId(/^credibility-/)[0];
+    const credSpan = (await screen.findAllByTestId(/^credibility-/))[0];
+    console.log("credSpan text:", credSpan.textContent);
     expect(credSpan.textContent).toMatch(/\d+%/);
   });
 });
 
 describe('Accessibility – empty states are descriptive', () => {
-  beforeEach(() => { resetMockData(); clearDynamicData(); });
+  beforeEach(() => { resetMockData();
+    seedTestData(); clearDynamicData(); });
 
-  test('SignalsScreen shows descriptive empty state text', () => {
+  test('SignalsScreen shows descriptive empty state text', async () => {
     render(<SignalsScreen />);
-    expect(screen.getByText(/no signals extracted yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no signals match current filters/i)).toBeInTheDocument();
   });
 
   test('TrendReviewBoard shows descriptive empty state text', async () => {
@@ -100,7 +106,8 @@ describe('Accessibility – empty states are descriptive', () => {
 });
 
 describe('Accessibility – cards are keyboard navigable', () => {
-  beforeEach(() => { resetMockData(); clearDynamicData(); });
+  beforeEach(() => { resetMockData();
+    seedTestData(); clearDynamicData(); });
 
 
   test('TrendReviewBoard cards have tabIndex=0', async () => {
@@ -120,7 +127,7 @@ describe('Accessibility – cards are keyboard navigable', () => {
       strengthScore: 0.8, confidenceScore: 0.8,
       evidenceDate: '2026-01-01', tags: [],
     }]);
-    addEvidence({ id: 'ev2', trendId: 't2', signalId: 's2', documentId: 'doc-1', sourceId: 'src-1', quote: 'q', relevanceReason: 'r' });
+    addEvidence([{ id: 'ev2', trendId: 't2', signalId: 's2', documentId: 'doc-1', sourceId: 'src-1', quote: 'q', relevanceReason: 'r' }]);
     render(<TrendReviewBoard />);
     const card = await screen.findByTestId('trend-card');
     expect(card).toHaveAttribute('tabindex', '0');
@@ -144,7 +151,7 @@ describe('Accessibility – cards are keyboard navigable', () => {
       strengthScore: 0.8, confidenceScore: 0.8,
       evidenceDate: '2026-01-01', tags: [],
     }]);
-    addEvidence({ id: 'ev3', trendId: 't3', signalId: 's3', documentId: 'doc-1', sourceId: 'src-1', quote: 'q', relevanceReason: 'r' });
+    addEvidence([{ id: 'ev3', trendId: 't3', signalId: 's3', documentId: 'doc-1', sourceId: 'src-1', quote: 'q', relevanceReason: 'r' }]);
     render(<TrendReviewBoard />);
     const card = await screen.findByTestId('trend-card');
     const user = userEvent.setup();

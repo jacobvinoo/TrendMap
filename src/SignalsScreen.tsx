@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getSignals, getSources, getDocuments, saveTrends, addEvidence } from './mockRepository';
-import { clusterSignalsIntoTrends } from './trendClustering';
-import { generateEvidenceLinks } from './evidenceLinking';
-import { X, Filter, BarChart2, Calendar, FileText, Globe, ArrowRight } from 'lucide-react';
+import { repository } from './repository';
+import { Filter, BarChart2, Calendar, FileText, Globe, ArrowRight } from 'lucide-react';
+import LogViewerModal from './LogViewerModal';
+import { MovableModal } from './MovableModal';
 
 import type { Signal, Source, Document } from './types';
 
 const SignalsScreen: React.FC = () => {
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [pestleFilter, setPestleFilter] = useState<string>('');
@@ -15,12 +16,36 @@ const SignalsScreen: React.FC = () => {
   const [selected, setSelected] = useState<Signal | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const allSignals = await repository.getSignals();
+      setSignals(allSignals);
+
+      const allSources = await repository.getSources();
+      setSources(allSources);
+
+      const allDocs = await repository.getDocuments();
+      setDocuments(allDocs);
+    } catch (err) {
+      console.error('Failed to load signal data', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setSignals(getSignals());
-    setSources(getSources());
-    setDocuments(getDocuments());
+    loadData();
   }, []);
+
+  useEffect(() => {
+    if (!selected) {
+      setShowHistory(false);
+    }
+  }, [selected]);
 
   const filtered = signals.filter((s) => {
     if (pestleFilter && s.pestleCategory !== pestleFilter) return false;
@@ -30,6 +55,21 @@ const SignalsScreen: React.FC = () => {
     }
     return true;
   });
+
+  const approvedSourceIds = new Set(sources.filter((source) => source.status === 'approved').map((source) => source.id));
+  const reviewableDocumentIds = new Set(
+    documents
+      .filter((document) => {
+        const content = (document.content || '').toLowerCase();
+        return approvedSourceIds.has(document.sourceId)
+          && ['raw', 'processed', 'extracted'].includes(document.ingestionStatus)
+          && !content.includes('mock extracted content');
+      })
+      .map((document) => document.id)
+  );
+  const eligibleSignals = filtered.filter((signal) =>
+    approvedSourceIds.has(signal.sourceId) && reviewableDocumentIds.has(signal.documentId)
+  );
 
   const getSourceName = (id: string) => {
     const src = sources.find((s) => s.id === id);
@@ -41,35 +81,23 @@ const SignalsScreen: React.FC = () => {
     return doc ? doc.title : id;
   };
 
-  const handleGenerateTrends = () => {
+  const handleGenerateTrends = async () => {
     setIsGenerating(true);
-    // Simulate slight processing delay for UX
-    setTimeout(() => {
-      const candidateTrends = clusterSignalsIntoTrends(signals);
-      if (candidateTrends.length === 0) {
-        setFeedbackMsg('No candidate trends could be generated from current signals.');
-        setIsGenerating(false);
-        return;
+    setFeedbackMsg('');
+    
+    try {
+      const savedTrends = await repository.analyzeTrends();
+      if (savedTrends.length === 0) {
+        setFeedbackMsg('No candidate trends were generated. Review the latest documents and extract signals from the current run first.');
+      } else {
+        setFeedbackMsg(`Generated ${savedTrends.length} candidate trend${savedTrends.length === 1 ? '' : 's'} from the current evidence run.`);
       }
-
-      const evidenceLinks = generateEvidenceLinks(candidateTrends, signals, documents, sources);
-      const validTrends = candidateTrends.filter(t => 
-        evidenceLinks.some(e => e.trendId === t.id)
-      );
-
-      if (validTrends.length === 0) {
-        setFeedbackMsg('No candidate trends could be generated (insufficient approved evidence).');
-        setIsGenerating(false);
-        return;
-      }
-
-      saveTrends(validTrends);
-      evidenceLinks.forEach(link => addEvidence(link));
-
-      setFeedbackMsg(`Generated ${validTrends.length} candidate trend(s) mapped with ${evidenceLinks.length} quotes.`);
+    } catch (err) {
+      console.error('Failed to generate trends:', err);
+      setFeedbackMsg(`Error: ${err instanceof Error ? err.message : 'Failed to generate trends.'}`);
+    } finally {
       setIsGenerating(false);
-      setTimeout(() => setFeedbackMsg(''), 5000);
-    }, 600);
+    }
   };
 
   const uniqueCategories = [...new Set(signals.map((s) => s.pestleCategory))].filter(Boolean);
@@ -91,9 +119,16 @@ const SignalsScreen: React.FC = () => {
               {feedbackMsg}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setShowLogs(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-800 border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-200 hover:bg-gray-700 hover:text-white"
+          >
+            View Logs
+          </button>
           <button 
             onClick={handleGenerateTrends}
-            disabled={isGenerating || signals.length === 0}
+            disabled={loading || isGenerating || eligibleSignals.length === 0}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-2"
           >
             {isGenerating ? 'Clustering...' : 'Generate Candidate Trends'}
@@ -103,6 +138,8 @@ const SignalsScreen: React.FC = () => {
           </a>
         </div>
       </div>
+
+      {showLogs && <LogViewerModal onClose={() => setShowLogs(false)} />}
 
       {/* Filters Bar */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
@@ -140,14 +177,16 @@ const SignalsScreen: React.FC = () => {
         </div>
         
         <div className="text-sm text-gray-500 ml-auto whitespace-nowrap">
-          Showing {filtered.length} of {signals.length} signals
+          Showing {filtered.length} of {signals.length} signals · {eligibleSignals.length} eligible for trend generation
         </div>
       </div>
 
       {/* Signals Grid */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-20 border border-dashed border-gray-700 rounded-xl bg-gray-800/50">
-          <p className="text-gray-400">No signals extracted yet.</p>
+      {loading ? (
+        <div className="p-8 text-center text-gray-400">Loading signals...</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-12 text-center text-gray-500 border border-dashed border-gray-700 rounded-xl bg-gray-800/30">
+          <p>No signals match current filters.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -192,95 +231,100 @@ const SignalsScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Detail Modal Overlay */}
+      {/* Detail Modal */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div 
-            data-testid="signal-detail-panel"
-            className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-gray-900/50">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold px-2 py-1 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-800/50 capitalize">
-                  {selected.pestleCategory}
-                </span>
-                <span className="text-sm text-gray-400 font-medium">Signal Details</span>
-              </div>
-              <button 
-                type="button" 
-                aria-label="Close" 
-                onClick={() => setSelected(null)}
-                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto">
-              <h3 className="text-xl font-bold text-white mb-4 leading-snug">
+        <MovableModal
+          title={`Signal: ${selected.pestleCategory}`}
+          subtitle="Signal Details"
+          onClose={() => setSelected(null)}
+          width="w-[700px]"
+          height="max-h-[85vh]"
+          testId="signal-detail-panel"
+        >
+          <div className="flex h-full flex-col">
+            <div className="flex-1 overflow-y-auto p-6">
+              <h3 className="mb-4 text-xl font-bold leading-snug text-white">
                 {selected.title}
               </h3>
               
-              <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 mb-6">
-                <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                  {selected.summary}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-3">
-                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Novelty</div>
-                  <div className="text-lg font-medium text-white">{Math.round(selected.noveltyScore * 100)}%</div>
-                </div>
-                <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-3">
-                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Strength</div>
-                  <div className="text-lg font-medium text-white">{Math.round(selected.strengthScore * 100)}%</div>
-                </div>
-              </div>
-
-              <div className="space-y-3 pt-4 border-t border-gray-800">
-                <div className="flex items-start gap-3">
-                  <Globe size={16} className="text-gray-500 mt-0.5" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Source</div>
-                    <div className="text-sm text-gray-200">{getSourceName(selected.sourceId)}</div>
+              {!showHistory ? (
+                <>
+                  <div className="mb-6 rounded-lg border border-gray-700/50 bg-gray-800/50 p-4">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-300">
+                      {selected.summary}
+                    </p>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <FileText size={16} className="text-gray-500 mt-0.5" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Origin Document</div>
-                    <div className="text-sm text-gray-200">{getDocumentTitle(selected.documentId)}</div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Calendar size={16} className="text-gray-500 mt-0.5" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Evidence Date</div>
-                    <div className="text-sm text-gray-200">
-                      {new Date(selected.evidenceDate).toLocaleDateString(undefined, { 
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-                      })}
+
+                  <div className="mb-6 grid grid-cols-2 gap-4">
+                    <div className="rounded-lg border border-gray-700/30 bg-gray-800/30 p-3">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Novelty</div>
+                      <div className="text-lg font-medium text-white">{Math.round(selected.noveltyScore * 100)}%</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-700/30 bg-gray-800/30 p-3">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Strength</div>
+                      <div className="text-lg font-medium text-white">{Math.round(selected.strengthScore * 100)}%</div>
                     </div>
                   </div>
+
+                  <div className="space-y-3 border-t border-gray-800 pt-4">
+                    <div className="flex items-start gap-3">
+                      <Globe size={16} className="mt-0.5 text-gray-500" />
+                      <div>
+                        <div className="text-xs font-medium text-gray-500">Source</div>
+                        <div className="text-sm text-gray-200">{getSourceName(selected.sourceId)}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <FileText size={16} className="mt-0.5 text-gray-500" />
+                      <div>
+                        <div className="text-xs font-medium text-gray-500">Origin Document</div>
+                        <div className="text-sm text-gray-200">{getDocumentTitle(selected.documentId)}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Calendar size={16} className="mt-0.5 text-gray-500" />
+                      <div>
+                        <div className="text-xs font-medium text-gray-500">Evidence Date</div>
+                        <div className="text-sm text-gray-200">
+                          {new Date(selected.evidenceDate).toLocaleDateString(undefined, { 
+                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {!selected.logs || selected.logs.length === 0 ? (
+                    <div className="text-sm italic text-gray-500">No logs available for this signal.</div>
+                  ) : (
+                    selected.logs.map((log, i) => (
+                      <div key={i} className="rounded-lg border border-gray-700/50 bg-gray-800/40 p-4 text-sm">
+                        <div className="mb-2 text-xs text-gray-500">
+                          {new Date(log.date).toLocaleString()}
+                        </div>
+                        <div className="whitespace-pre-wrap text-sm text-gray-300">
+                          {log.message}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              </div>
+              )}
             </div>
             
-            {/* Modal Footer */}
-            <div className="p-5 border-t border-gray-800 bg-gray-900/50 flex justify-end">
+            <div className="flex justify-between border-t border-gray-800 bg-gray-900/50 p-5">
               <button 
                 type="button" 
-                onClick={() => setSelected(null)}
-                className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                onClick={() => setShowHistory(!showHistory)}
+                className="rounded-lg border border-indigo-500/30 bg-indigo-600/20 px-4 py-2 text-sm font-medium text-indigo-300 transition-colors hover:bg-indigo-600/30"
               >
-                Close
+                {showHistory ? 'View Details' : 'View History'}
               </button>
             </div>
           </div>
-        </div>
+        </MovableModal>
       )}
     </div>
   );

@@ -57,12 +57,12 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
       alerts: [], summaries: [],
       strategicContext: null, assumptions: [], leadingIndicators: [],
       strategicImplications: [], scenarios: [], strategicOptions: [],
-      decisionBriefs: [], roadmapItems: [],
+      decisionBriefs: [], roadmapItems: [],   knowledgeGraph: { nodes: [], edges: [] },
     };
   });
 
   it('high risk appetite produces invest options for opportunities', () => {
-    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT);
+    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT, []);
     const opps = implications.filter(si => si.implicationType === 'opportunity');
     const options = generateStrategicOptions(opps, [], [], HIGH_RISK_CONTEXT);
     const types = options.map(o => o.optionType);
@@ -70,7 +70,7 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
   });
 
   it('low risk appetite produces monitor options for same opportunities', () => {
-    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], LOW_RISK_CONTEXT);
+    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], LOW_RISK_CONTEXT, []);
     const opps = implications.filter(si => si.implicationType === 'opportunity');
     const options = generateStrategicOptions(opps, [], [], LOW_RISK_CONTEXT);
     const types = options.map(o => o.optionType);
@@ -78,7 +78,7 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
   });
 
   it('speculative trend generates watch_item implication', () => {
-    const implications = generateStrategicImplications([SPECULATIVE_TREND], LOW_RISK_CONTEXT);
+    const implications = generateStrategicImplications([SPECULATIVE_TREND], LOW_RISK_CONTEXT, []);
     expect(implications.some(si => si.implicationType === 'watch_item')).toBe(true);
   });
 
@@ -86,8 +86,8 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
     const assumptions = generateAssumptionsFromTrends([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT);
     // Simulate all invalidated
     const invalidated = assumptions.map(a => ({ ...a, status: 'invalidated' as const }));
-    const indicators = generateLeadingIndicators(invalidated);
-    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT);
+    const indicators = generateLeadingIndicators(invalidated, []);
+    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT, []);
     const options = generateStrategicOptions(implications, [], invalidated, HIGH_RISK_CONTEXT);
     const brief = generateDecisionBrief(HIGH_RISK_CONTEXT, implications, options, invalidated, indicators);
     // No invalidated assumptions should need testing
@@ -96,9 +96,9 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
 
   it('declining indicators still appear in indicatorsToMonitor', () => {
     const assumptions = generateAssumptionsFromTrends([SPECULATIVE_TREND], LOW_RISK_CONTEXT);
-    const indicators = generateLeadingIndicators(assumptions);
+    const indicators = generateLeadingIndicators(assumptions, []);
     const declining = indicators.map(li => ({ ...li, currentStatus: 'declining' as const }));
-    const implications = generateStrategicImplications([SPECULATIVE_TREND], LOW_RISK_CONTEXT);
+    const implications = generateStrategicImplications([SPECULATIVE_TREND], LOW_RISK_CONTEXT, []);
     const options = generateStrategicOptions(implications, [], assumptions, LOW_RISK_CONTEXT);
     const brief = generateDecisionBrief(LOW_RISK_CONTEXT, implications, options, assumptions, declining);
     // Declining indicators (not accelerating) should still be monitored
@@ -111,7 +111,7 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
   });
 
   it('roadmap assigns now/next/later horizons correctly', () => {
-    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT);
+    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT, []);
     const options = generateStrategicOptions(implications, [], [], HIGH_RISK_CONTEXT);
     const items = generateRoadmapItems(options);
     // High urgency options → 3_months timeToValue → 'now' horizon
@@ -119,7 +119,7 @@ describe('Phase 3 E2E — Risk and Uncertainty Path', () => {
   });
 
   it('high momentum threat trend produces a threat implication', () => {
-    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT);
+    const implications = generateStrategicImplications([HIGH_MOMENTUM_THREAT_TREND], HIGH_RISK_CONTEXT, []);
     expect(implications.some(si => si.implicationType === 'threat')).toBe(true);
   });
 });

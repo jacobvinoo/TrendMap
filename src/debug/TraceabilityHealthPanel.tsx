@@ -13,8 +13,8 @@ export const TraceabilityHealthPanel: React.FC = () => {
   const [report, setReport] = useState<TraceabilityReportItem[] | null>(null);
   const [ran, setRan] = useState(false);
 
-  const handleRun = () => {
-    const result = validateTraceability();
+  const handleRun = async () => {
+    const result = await validateTraceability();
     setReport(result);
     setRan(true);
   };
