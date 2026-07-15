@@ -231,7 +231,7 @@ const VALID_OPTION_TYPES = ['invest', 'experiment', 'partner', 'monitor', 'defen
 const VALID_EFFORT_LEVELS = ['low', 'medium', 'high'] as const;
 const VALID_TIME_TO_VALUE = ['now', '3_months', '6_months', '12_months', '24_months'] as const;
 const VALID_ROADMAP_HORIZONS = ['now', 'next', 'later'] as const;
-const VALID_ROADMAP_STATUSES = ['proposed', 'accepted', 'rejected', 'in_progress'] as const;
+const VALID_ROADMAP_STATUSES = ['proposed', 'accepted', 'rejected', 'in_progress', 'blocked', 'completed'] as const;
 
 export function isValidStrategicContext(obj: any): boolean {
   if (!obj || typeof obj !== 'object') return false;
@@ -352,4 +352,3 @@ export function isValidRoadmapItem(obj: any): boolean {
   if (!Array.isArray(obj.linkedIndicatorIds)) return false;
   return true;
 }
-

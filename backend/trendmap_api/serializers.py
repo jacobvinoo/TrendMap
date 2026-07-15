@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Industry, Source, Document, Signal, Trend, TrendTheme, ExtractionRun, NewsScanRun, NewsSnippet, AgentActivity, AgentDebate, Alert, Assumption, AuditEvent, ChangeEvent, DataExport, DecisionBrief, Embedding, EvidenceLink, HealthCheck, KgEdge, KgNode, LeadingIndicator, MonitoringRule, MonitoringRun, PredictionOutcome, PredictionUpdate, Prediction, RoadmapItem, Scenario, SourceSnapshot, StrategicContext, StrategicImplication, StrategicOption, TrendScoreChange, TrendScoreSnapshot, WhatChangedSummary
+from .models import Industry, Source, Document, Signal, Trend, TrendTheme, ExtractionRun, NewsScanRun, NewsSnippet, AgentActivity, AgentDebate, Alert, Assumption, AuditEvent, ChangeEvent, DataExport, DecisionBrief, Embedding, EvidenceLink, HealthCheck, KgEdge, KgNode, LeadingIndicator, MonitoringRule, MonitoringRun, PredictionOutcome, PredictionUpdate, Prediction, RoadmapItem, Scenario, SourceSnapshot, StrategicContext, StrategicImplication, StrategicOption, TrendScoreChange, TrendScoreSnapshot, WhatChangedSummary, Workspace, WorkspaceMembership, Finding
 import json
 
 class JsonArrayMixin:
@@ -18,6 +18,44 @@ class JsonArrayMixin:
 class IndustrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Industry
+        fields = '__all__'
+
+class WorkspaceSerializer(serializers.ModelSerializer):
+    currentUserRole = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workspace
+        fields = '__all__'
+
+    def get_currentUserRole(self, obj):
+        request = self.context.get('request')
+        user_id = request.headers.get('X-TrendMap-User') if request else None
+        user_id = user_id or 'user-default'
+        membership = WorkspaceMembership.objects.filter(workspace=obj, user_id=user_id).first()
+        if membership:
+            return membership.role
+        if not WorkspaceMembership.objects.filter(workspace=obj).exists():
+            return 'owner'
+        return None
+
+class WorkspaceMembershipSerializer(serializers.ModelSerializer):
+    workspaceId = serializers.CharField(source='workspace_id', read_only=True)
+    userId = serializers.CharField(source='user_id')
+
+    class Meta:
+        model = WorkspaceMembership
+        fields = ['id', 'workspaceId', 'userId', 'role', 'created_at', 'updated_at']
+
+class FindingSerializer(serializers.ModelSerializer):
+    workspaceId = serializers.CharField(source='workspace_id', read_only=True)
+    sourceId = serializers.CharField(source='source_id', read_only=True)
+    documentId = serializers.CharField(source='document_id', read_only=True)
+    signalId = serializers.CharField(source='signal_id', read_only=True)
+    trendId = serializers.CharField(source='trend_id', read_only=True)
+    metadata = serializers.JSONField(source='metadata_json', required=False)
+
+    class Meta:
+        model = Finding
         fields = '__all__'
 
 class SourceSerializer(serializers.ModelSerializer):
@@ -82,7 +120,7 @@ class TrendThemeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TrendTheme
-        fields = ['id', 'industry', 'industry_id', 'industryId', 'name', 'description', 'keywords', 'status', 'origin', 'evidence_summary', 'created_at', 'updated_at']
+        fields = ['id', 'industry', 'industry_id', 'industryId', 'name', 'description', 'keywords', 'aliases', 'status', 'origin', 'evidence_summary', 'created_at', 'updated_at']
         extra_kwargs = {'industry': {'write_only': True, 'required': False, 'allow_null': True}}
 
 class ExtractionRunSerializer(serializers.ModelSerializer):

@@ -134,6 +134,71 @@ describe('ApiRepository', () => {
     }));
   });
 
+  it('refreshes captured document content through the API', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'doc-refresh',
+        title: 'Refreshed article',
+        content: 'Captured article text',
+        ingestion_status: 'raw'
+      })
+    });
+
+    const document = await repo.refreshDocumentContent('doc-refresh');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/documents/doc-refresh/refresh-content', expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(document.content).toBe('Captured article text');
+  });
+
+  it('replaces document content through the API', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'doc-paste',
+        title: 'Pasted article',
+        content: 'Pasted article text',
+        ingestion_status: 'raw',
+        extracted_signal_ids: []
+      })
+    });
+
+    const document = await repo.updateDocumentContent('doc-paste', 'Pasted article text');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/documents/doc-paste/replace-content', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Pasted article text' })
+    }));
+    expect(document.content).toBe('Pasted article text');
+    expect(document.ingestionStatus).toBe('raw');
+  });
+
+  it('extracts signals and maps backend field names for UI feedback', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([{
+        id: 'sig-1',
+        document_id: 'doc-1',
+        signal_type: 'digital_discovery',
+        strength_score: 0.78,
+        title: 'AI-assisted grocery discovery',
+        summary: 'AI search is changing grocery discovery.'
+      }])
+    });
+
+    const signals = await repo.extractSignalsFromDocument('doc-1');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/agents/extract/doc-1', expect.objectContaining({
+      method: 'POST',
+    }));
+    expect(signals[0].documentId).toBe('doc-1');
+    expect(signals[0].signalType).toBe('digital_discovery');
+    expect(signals[0].strengthScore).toBe(0.78);
+  });
+
   it('updateSourceStatus sends PATCH request', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -257,6 +322,111 @@ describe('ApiRepository', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/admin/clear-analysis-data', { method: 'POST' });
     expect(result.deletedCounts.documents).toBe(2);
     expect(result.status).toBe('cleared');
+  });
+
+  it('treats missing trend evidence as an empty list', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => '{"detail":"No Trend matches the given query."}'
+    });
+
+    const result = await repo.getEvidenceForTrend('stale-trend');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/trends/stale-trend/evidence', undefined);
+    expect(result).toEqual([]);
+  });
+
+  it('reads trend history from filtered audit events', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([{
+        id: 'audit-1',
+        entity_type: 'trend',
+        entity_id: 'trend-1',
+        action: 'trend.status.approved',
+        user_id: 'user-strategist',
+        details: '{"workspaceId":"ws-search"}',
+        timestamp: '2026-07-15T00:00:00Z',
+      }])
+    });
+
+    const result = await repo.getTrendHistory('trend-1');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/audit-events?entity_type=trend&entity_id=trend-1', undefined);
+    expect(result[0].entityId).toBe('trend-1');
+  });
+
+  it('reads workspace audit events with deterministic filters', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([{
+        id: 'audit-workspace-1',
+        entity_type: 'trend',
+        entity_id: 'trend-1',
+        action: 'trend.status.approved',
+        user_id: 'user-strategist',
+        details: '{"workspaceId":"ws-search"}',
+        timestamp: '2026-07-15T00:00:00Z',
+      }])
+    });
+
+    const result = await repo.getAuditEvents({ entityType: 'trend', workspaceId: 'ws-search' });
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/audit-events?entity_type=trend&workspace_id=ws-search', undefined);
+    expect(result[0].entityId).toBe('trend-1');
+  });
+
+  it('manages workspace members through workspace endpoints', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([{ id: 'mem-1', user_id: 'user-owner', role: 'owner' }])
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'mem-2', user_id: 'user-analyst', role: 'analyst' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({})
+      });
+
+    const members = await repo.getWorkspaceMembers('ws-search');
+    const added = await repo.upsertWorkspaceMember('ws-search', { userId: 'user-analyst', role: 'analyst' });
+    await repo.removeWorkspaceMember('ws-search', 'user-analyst');
+
+    expect(mockFetch).toHaveBeenNthCalledWith(1, '/api/workspaces/ws-search/members', undefined);
+    expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/workspaces/ws-search/members', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: 'user-analyst', role: 'analyst' }),
+    }));
+    expect(mockFetch).toHaveBeenNthCalledWith(3, '/api/workspaces/ws-search/members/user-analyst', expect.objectContaining({
+      method: 'DELETE',
+    }));
+    expect(members[0].userId).toBe('user-owner');
+    expect(added.userId).toBe('user-analyst');
+  });
+
+  it('reads signal history from filtered audit events', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([{
+        id: 'audit-signal-1',
+        entity_type: 'signal',
+        entity_id: 'signal-1',
+        action: 'signal.extracted',
+        user_id: 'agent',
+        details: '{}',
+        timestamp: '2026-07-15T00:00:00Z',
+      }])
+    });
+
+    const result = await repo.getSignalHistory('signal-1');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/audit-events?entity_type=signal&entity_id=signal-1', undefined);
+    expect(result[0].entityId).toBe('signal-1');
   });
 
   it('runs news scan for source candidates', async () => {

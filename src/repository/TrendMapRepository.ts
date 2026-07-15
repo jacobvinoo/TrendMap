@@ -6,10 +6,24 @@ import type {
   AgentActivity, Prediction, AgentDebate, SemanticSearchResult,
   DataExportResult, DataImportResult, DataHealthSummary, DataClearResult,
   KnowledgeGraphBuildResult, KnowledgeGraphNeighborhood,
-  SourceReliabilityResult, ForecastCalibrationResult, InsightSummary, AuditEvent, NewsScanResult, TrendTheme
+  SourceReliabilityResult, ForecastCalibrationResult, InsightSummary, AuditEvent, NewsScanResult, TrendTheme, WorkspaceReadinessSummary
+  , Workspace, WorkspaceMembership, Finding, FindingStatus
 } from '../types';
 
 export interface TrendMapRepository {
+  // Workspace scope
+  getWorkspaces(): Promise<Workspace[]>;
+  createWorkspace(workspace: Partial<Workspace>): Promise<Workspace>;
+  getActiveWorkspace(): Promise<Workspace | null>;
+  setActiveWorkspace(workspaceId: string): Promise<void>;
+  getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMembership[]>;
+  upsertWorkspaceMember(workspaceId: string, member: { userId: string; role: string }): Promise<WorkspaceMembership>;
+  removeWorkspaceMember(workspaceId: string, userId: string): Promise<void>;
+  getWorkspaceReadiness(): Promise<WorkspaceReadinessSummary>;
+  getFindings(filters?: { status?: FindingStatus | 'all' }): Promise<Finding[]>;
+  createFinding(finding: Partial<Finding>): Promise<Finding>;
+  updateFinding(findingId: string, patch: Partial<Finding>): Promise<void>;
+
   // Phase 1
   getIndustryProfile(): Promise<IndustryProfile | null>;
   saveIndustryProfile(profile: IndustryProfile): Promise<void>;
@@ -29,6 +43,8 @@ export interface TrendMapRepository {
   getDocuments(): Promise<Document[]>;
   createDocument(document: Partial<Document>): Promise<Document>;
   uploadDocument(file: File, metadata: Partial<Document>): Promise<Document>;
+  refreshDocumentContent(documentId: string): Promise<Document>;
+  updateDocumentContent(documentId: string, content: string): Promise<Document>;
   deleteDocument(documentId: string): Promise<void>;
   updateDocumentIngestionStatus(documentId: string, status: string): Promise<void>;
   updateDocumentExtractedSignals(documentId: string, signalIds: string[]): Promise<void>;
@@ -45,6 +61,7 @@ export interface TrendMapRepository {
   updateTrend(trendId: string, patch: Partial<Trend>): Promise<void>;
   clusterTrend(name: string, status: TrendStatus): Promise<Trend>;
   getTrendHistory(trendId: string): Promise<AuditEvent[]>;
+  getAuditEvents(filters?: { entityType?: string; entityId?: string; userId?: string; workspaceId?: string }): Promise<AuditEvent[]>;
   
   addEvidence(evidence: any[]): Promise<void>;
   getEvidenceForTrend(trendId: string): Promise<EvidenceLink[]>;

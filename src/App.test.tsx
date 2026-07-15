@@ -1,9 +1,10 @@
 import { seedTestData } from "./testSeed";
 // @ts-nocheck
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, test, expect, beforeEach } from 'vitest';
 import App from './App';
+import { repository } from './repository';
 import { resetMockData } from './mockRepository';
 
 describe('App shell', () => {
@@ -78,7 +79,9 @@ describe('App shell', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Trends' }));
     // TrendReviewBoard renders its heading or empty state
-    expect(await screen.findByText(/trend review board/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /trend review board/i })).toBeInTheDocument();
+    });
   });
 
   test('clicking Insights tab renders InsightsScreen', async () => {
@@ -95,5 +98,135 @@ describe('App shell', () => {
 
     expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
     expect(await screen.findByTestId('traceability-health-panel')).toBeInTheDocument();
+  });
+
+  test('direct #options route renders Strategic Options screen', async () => {
+    window.location.hash = '#options';
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /strategic options/i })).toBeInTheDocument();
+  });
+
+  test('direct #roadmap route renders Strategic Roadmap screen', async () => {
+    window.location.hash = '#roadmap';
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /strategic roadmap/i })).toBeInTheDocument();
+  });
+
+  test('direct #audit route renders Audit Trail screen', async () => {
+    window.history.replaceState(null, '', '#audit');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('audit-trail-screen')).toBeInTheDocument();
+  });
+
+  test('direct #members route renders Workspace Members screen', async () => {
+    window.history.replaceState(null, '', '#members');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-members-screen')).toBeInTheDocument();
+  });
+
+  test('direct #operations route renders Operations Overview screen', async () => {
+    window.history.replaceState(null, '', '#operations');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('operations-overview-screen')).toBeInTheDocument();
+  });
+
+  test('direct #trend-timeline route renders Trend Timeline screen', async () => {
+    window.history.replaceState(null, '', '#trend-timeline');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('trend-timeline-screen')).toBeInTheDocument();
+  });
+
+  test('direct #strategic-actions route renders Strategic Actions screen', async () => {
+    window.history.replaceState(null, '', '#strategic-actions');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('strategic-actions-screen')).toBeInTheDocument();
+  });
+
+  test('direct #watchlist route renders Watchlist Topics screen', async () => {
+    window.history.replaceState(null, '', '#watchlist');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('watchlist-topics-screen')).toBeInTheDocument();
+  });
+
+  test('direct #topic-timeline route renders Topic Timeline screen', async () => {
+    window.history.replaceState(null, '', '#topic-timeline');
+
+    render(<App />);
+
+    expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+    expect(screen.getByTestId('topic-timeline-screen')).toBeInTheDocument();
+  });
+
+  test('shows the active workspace in the app shell and can create a new workspace', async () => {
+    render(<App />);
+
+    expect(await screen.findByLabelText(/active workspace/i)).toHaveDisplayValue('Company-wide Trends');
+    expect(screen.getByText(/Role: Owner/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /new workspace/i }));
+    fireEvent.change(screen.getByLabelText(/workspace name/i), { target: { value: 'Search' } });
+    fireEvent.change(screen.getByLabelText(/workspace purpose/i), { target: { value: 'Search-specific trend monitoring' } });
+    fireEvent.click(screen.getByRole('button', { name: /create workspace/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/active workspace/i)).toHaveDisplayValue('Search');
+    });
+    expect((await repository.getActiveWorkspace())?.name).toBe('Search');
+  });
+
+  test('switching workspace refreshes the current screen scope', async () => {
+    window.location.hash = '#findings';
+    const company = await repository.getActiveWorkspace();
+    const search = await repository.createWorkspace({ name: 'Search' });
+
+    await repository.setActiveWorkspace(company!.id);
+    await repository.createFinding({
+      findingType: 'news_snippet',
+      title: 'Company finding',
+      summary: 'Company-wide evidence for review.',
+      status: 'new',
+    });
+    await repository.setActiveWorkspace(search.id);
+    await repository.createFinding({
+      findingType: 'news_snippet',
+      title: 'Search finding',
+      summary: 'Search-specific evidence for review.',
+      status: 'new',
+    });
+    await repository.setActiveWorkspace(company!.id);
+
+    render(<App />);
+
+    expect(await screen.findByText(/Company finding/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Search finding/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/active workspace/i), { target: { value: search.id } });
+
+    expect(await screen.findByText(/Search finding/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Company finding/i)).not.toBeInTheDocument();
   });
 });

@@ -1,19 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Activity, CheckCircle2, Trash2, XCircle } from 'lucide-react';
 import { repository } from './repository';
-import type { DataHealthSummary } from './types';
+import type { DataHealthSummary, Workspace } from './types';
+
+function canClearGeneratedData(workspace: Workspace | null): boolean {
+  const role = workspace?.currentUserRole || 'owner';
+  return role === 'owner' || role === 'admin';
+}
 
 export default function AdminDataHealthScreen() {
   const [summary, setSummary] = useState<DataHealthSummary | null>(null);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [notice, setNotice] = useState('');
+  const clearAllowed = canClearGeneratedData(workspace);
 
   const runCheck = async () => {
     setLoading(true);
     try {
-      setSummary(await repository.runDataHealthCheck());
+      const [activeWorkspace, healthSummary] = await Promise.all([
+        repository.getActiveWorkspace(),
+        repository.runDataHealthCheck(),
+      ]);
+      setWorkspace(activeWorkspace);
+      setSummary(healthSummary);
     } finally {
       setLoading(false);
     }
@@ -24,9 +36,14 @@ export default function AdminDataHealthScreen() {
   }, []);
 
   const clearGeneratedData = async () => {
+    if (!clearAllowed) {
+      setNotice('Only workspace owners or admins can clear generated data.');
+      return;
+    }
+
     if (!confirmClear) {
       setConfirmClear(true);
-      setNotice('Click Confirm Clear to remove generated documents, signals, trends, evidence, and insights. Sources and industry setup will be kept.');
+      setNotice('Click Confirm Clear to remove generated documents, signals, trends, evidence, and insights for the active workspace. Sources and industry setup will be kept.');
       return;
     }
 
@@ -51,12 +68,12 @@ export default function AdminDataHealthScreen() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Data Health</h1>
-          <p className="text-gray-400 mt-2">Validate evidence chains, references, and operational health records.</p>
+          <p className="text-gray-400 mt-2">Validate evidence chains, references, and operational health records for the active workspace.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={clearGeneratedData}
-            disabled={clearing}
+            disabled={clearing || !clearAllowed}
             className={`inline-flex items-center justify-center gap-2 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-medium ${
               confirmClear ? 'bg-red-600 hover:bg-red-500' : 'bg-gray-700 hover:bg-gray-600'
             }`}
@@ -74,6 +91,12 @@ export default function AdminDataHealthScreen() {
           </button>
         </div>
       </div>
+
+      {!clearAllowed && (
+        <div className="mb-6 rounded-lg border border-amber-700 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+          Only workspace owners or admins can clear generated data.
+        </div>
+      )}
 
       {notice && (
         <div className="mb-6 rounded-lg border border-indigo-700 bg-indigo-900/30 px-4 py-3 text-sm text-indigo-100">

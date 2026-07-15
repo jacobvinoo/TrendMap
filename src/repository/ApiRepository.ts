@@ -8,9 +8,11 @@ import type {
   DataExportResult, DataHealthSummary, DataImportResult, DataClearResult,
   ForecastCalibrationResult, KnowledgeGraphBuildResult,
   KnowledgeGraphNeighborhood, SourceReliabilityResult, InsightSummary, AuditEvent, NewsScanResult, TrendTheme
+  , Workspace, WorkspaceMembership, Finding, FindingStatus, WorkspaceReadinessSummary
 } from '../types';
 
 import { keysToCamel, keysToSnake } from '../utils/caseConvert';
+import { buildWorkspaceReadiness } from '../workspaceReadiness';
 
 export class ApiRepository implements TrendMapRepository {
   // Use absolute URL in Node (Vitest) environments to prevent Invalid URL errors
@@ -28,6 +30,19 @@ export class ApiRepository implements TrendMapRepository {
       }
     }
     return [];
+  }
+
+  private activeWorkspaceId(): string | null {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem('trendmap.activeWorkspaceId');
+  }
+
+  private withWorkspaceHeader(options?: RequestInit): RequestInit | undefined {
+    const workspaceId = this.activeWorkspaceId();
+    if (!workspaceId) return options;
+    const headers = new Headers(options?.headers);
+    headers.set('X-TrendMap-Workspace', workspaceId);
+    return { ...options, headers };
   }
 
   private normalizeIndustryProfile(profile: any): IndustryProfile {
@@ -113,6 +128,7 @@ export class ApiRepository implements TrendMapRepository {
         // Not JSON, ignore
       }
     }
+    requestOptions = this.withWorkspaceHeader(requestOptions);
     requestOptions = await this.withSessionProtection(requestOptions);
     const response = await fetch(`${this.baseUrl}${url}`, requestOptions);
     if (!response.ok) {
@@ -121,6 +137,123 @@ export class ApiRepository implements TrendMapRepository {
     }
     const data = await response.json();
     return keysToCamel(data);
+  }
+
+  async getWorkspaces(): Promise<Workspace[]> {
+    return this.fetchJson<Workspace[]>('/workspaces');
+  }
+
+  async createWorkspace(workspace: Partial<Workspace>): Promise<Workspace> {
+    return this.fetchJson<Workspace>('/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(workspace),
+    });
+  }
+
+  async getActiveWorkspace(): Promise<Workspace | null> {
+    const workspaces = await this.getWorkspaces();
+    const saved = this.activeWorkspaceId();
+    if (saved) return workspaces.find((workspace) => workspace.id === saved) || null;
+    const first = workspaces[0] || null;
+    if (first && typeof window !== 'undefined') {
+      window.localStorage.setItem('trendmap.activeWorkspaceId', first.id);
+    }
+    return first;
+  }
+
+  async setActiveWorkspace(workspaceId: string): Promise<void> {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('trendmap.activeWorkspaceId', workspaceId);
+    }
+  }
+
+  async getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMembership[]> {
+    return this.fetchJson<WorkspaceMembership[]>(`/workspaces/${encodeURIComponent(workspaceId)}/members`);
+  }
+
+  async upsertWorkspaceMember(workspaceId: string, member: { userId: string; role: string }): Promise<WorkspaceMembership> {
+    return this.fetchJson<WorkspaceMembership>(`/workspaces/${encodeURIComponent(workspaceId)}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(member),
+    });
+  }
+
+  async removeWorkspaceMember(workspaceId: string, userId: string): Promise<void> {
+    const response = await fetch(
+      `${this.baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`,
+      await this.withSessionProtection(this.withWorkspaceHeader({ method: 'DELETE' }))
+    );
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Failed to remove workspace member: ${err || response.statusText}`);
+    }
+  }
+
+  async getWorkspaceReadiness(): Promise<WorkspaceReadinessSummary> {
+    const workspace = await this.getActiveWorkspace();
+    const [
+      industryProfile,
+      themes,
+      findings,
+      sources,
+      documents,
+      signals,
+      trends,
+      alerts,
+      monitoringRules,
+      strategicContext,
+      members,
+    ] = await Promise.all([
+      this.getIndustryProfile(),
+      this.getTrendThemes(),
+      this.getFindings({ status: 'new' }),
+      this.getSources(),
+      this.getDocuments(),
+      this.getSignals(),
+      this.getTrends(),
+      this.getAlerts(),
+      this.getMonitoringRules(),
+      this.getStrategicContext(),
+      workspace ? this.getWorkspaceMembers(workspace.id) : Promise.resolve([]),
+    ]);
+
+    return buildWorkspaceReadiness({
+      workspace,
+      industryProfile,
+      themes,
+      findings,
+      sources,
+      documents,
+      signals,
+      trends,
+      alerts,
+      monitoringRules,
+      strategicContext,
+      members,
+    });
+  }
+
+  async getFindings(filters: { status?: FindingStatus | 'all' } = {}): Promise<Finding[]> {
+    const query = filters.status && filters.status !== 'all' ? `?status=${encodeURIComponent(filters.status)}` : '';
+    return this.fetchJson<Finding[]>(`/findings${query}`);
+  }
+
+  async createFinding(finding: Partial<Finding>): Promise<Finding> {
+    return this.fetchJson<Finding>('/findings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(finding),
+    });
+  }
+
+  async updateFinding(findingId: string, patch: Partial<Finding>): Promise<void> {
+    await this.fetchJson(`/findings/${findingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
   }
 
   async getIndustryProfile(): Promise<IndustryProfile | null> {
@@ -226,9 +359,9 @@ export class ApiRepository implements TrendMapRepository {
   }
 
   async deleteSource(sourceId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/sources/${sourceId}`, await this.withSessionProtection({
+    const response = await fetch(`${this.baseUrl}/sources/${sourceId}`, await this.withSessionProtection(this.withWorkspaceHeader({
       method: 'DELETE'
-    }));
+    })));
     if (!response.ok) {
       throw new Error('Failed to delete source');
     }
@@ -277,10 +410,25 @@ export class ApiRepository implements TrendMapRepository {
     });
   }
 
+  async refreshDocumentContent(documentId: string): Promise<Document> {
+    return this.fetchJson<Document>(`/documents/${documentId}/refresh-content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  async updateDocumentContent(documentId: string, content: string): Promise<Document> {
+    return this.fetchJson<Document>(`/documents/${documentId}/replace-content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+  }
+
   async deleteDocument(documentId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/documents/${documentId}`, await this.withSessionProtection({
+    const response = await fetch(`${this.baseUrl}/documents/${documentId}`, await this.withSessionProtection(this.withWorkspaceHeader({
       method: 'DELETE'
-    }));
+    })));
     if (!response.ok) {
       const err = await response.text();
       throw new Error(`Failed to delete document: ${err || response.statusText}`);
@@ -314,15 +462,25 @@ export class ApiRepository implements TrendMapRepository {
   }
 
   async extractSignalsFromDocument(documentId: string): Promise<Signal[]> {
-    const response = await fetch(`${this.baseUrl}/agents/extract/${documentId}`, await this.withSessionProtection({ method: 'POST' }));
+    const response = await fetch(`${this.baseUrl}/agents/extract/${documentId}`, await this.withSessionProtection(this.withWorkspaceHeader({ method: 'POST' })));
     if (!response.ok) {
       throw new Error(`Failed to extract signals: ${response.statusText}`);
     }
-    return response.json();
+    return keysToCamel(await response.json());
+  }
+
+  async getAuditEvents(filters: { entityType?: string; entityId?: string; userId?: string; workspaceId?: string } = {}): Promise<AuditEvent[]> {
+    const params = new URLSearchParams();
+    if (filters.entityType) params.set('entity_type', filters.entityType);
+    if (filters.entityId) params.set('entity_id', filters.entityId);
+    if (filters.userId) params.set('user_id', filters.userId);
+    if (filters.workspaceId) params.set('workspace_id', filters.workspaceId);
+    const query = params.toString();
+    return this.fetchJson<AuditEvent[]>(`/audit-events${query ? `?${query}` : ''}`);
   }
 
   async getSignalHistory(signalId: string): Promise<AuditEvent[]> {
-    return this.fetchJson<AuditEvent[]>(`/signals/${signalId}/history`);
+    return this.getAuditEvents({ entityType: 'signal', entityId: signalId });
   }
 
   async extractSignal(documentId: string, sourceId: string, title: string, noveltyScore: number): Promise<Signal> {
@@ -354,7 +512,7 @@ export class ApiRepository implements TrendMapRepository {
   }
 
   async getTrendHistory(trendId: string): Promise<AuditEvent[]> {
-    return this.fetchJson<AuditEvent[]>(`/trends/${trendId}/history`);
+    return this.getAuditEvents({ entityType: 'trend', entityId: trendId });
   }
 
   async saveTrends(trends: Trend[]): Promise<Trend[]> {
@@ -396,7 +554,14 @@ export class ApiRepository implements TrendMapRepository {
   }
 
   async getEvidenceForTrend(trendId: string): Promise<EvidenceLink[]> {
-    return this.fetchJson<EvidenceLink[]>(`/trends/${trendId}/evidence`);
+    try {
+      return await this.fetchJson<EvidenceLink[]>(`/trends/${trendId}/evidence`);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('API Error 404')) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   async getRelatedSignals(trendId: string): Promise<Signal[]> {
@@ -414,9 +579,9 @@ export class ApiRepository implements TrendMapRepository {
     await this.fetchJson('/monitoring-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rule) });
   }
   async deleteMonitoringRule(ruleId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/monitoring-rules/${ruleId}`, await this.withSessionProtection({
+    const response = await fetch(`${this.baseUrl}/monitoring-rules/${ruleId}`, await this.withSessionProtection(this.withWorkspaceHeader({
       method: 'DELETE'
-    }));
+    })));
     if (!response.ok) {
       throw new Error('Failed to delete monitoring rule');
     }

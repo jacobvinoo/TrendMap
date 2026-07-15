@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import SourceLibrary from './SourceLibrary';
 import { resetMockData, getSources } from './mockRepository';
+import { repository } from './repository';
 
 describe('SourceLibrary component', () => {
   beforeEach(() => {
@@ -129,5 +130,30 @@ describe('SourceLibrary component', () => {
     await waitFor(() => {
       expect(screen.queryByText(source.name)).not.toBeInTheDocument();
     });
+  });
+
+  it('disables source approval actions for analyst workspaces', async () => {
+    const analystWorkspace = await repository.createWorkspace({
+      name: 'Search Analyst',
+      currentUserRole: 'analyst',
+    });
+    await repository.setActiveWorkspace(analystWorkspace.id);
+    await repository.createSource({
+      name: 'Analyst Suggested Source',
+      url: 'https://example.com/analyst-source',
+      sourceType: 'news',
+      status: 'suggested',
+      credibilityScore: 0.7,
+      relevanceScore: 0.7,
+      freshnessScore: 0.7,
+      notes: '',
+    });
+
+    render(<SourceLibrary />);
+
+    const sourceNameEl = await screen.findByText('Analyst Suggested Source');
+    const sourceCard = sourceNameEl.closest('[data-testid="source-card"]') as HTMLElement;
+    expect(within(sourceCard).getByRole('button', { name: /approve/i })).toBeDisabled();
+    expect(within(sourceCard).getByRole('button', { name: /reject/i })).toBeDisabled();
   });
 });

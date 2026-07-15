@@ -1,6 +1,8 @@
 // Domain type definitions
 export interface IndustryProfile {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   name: string;
   geography: string;
   description: string;
@@ -10,9 +12,138 @@ export interface IndustryProfile {
   timeHorizons: string[];
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  purpose?: string;
+  currentUserRole?: string | null;
+  ownerUserId?: string;
+  owner_user_id?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
+export type WorkspaceRole =
+  | 'owner'
+  | 'admin'
+  | 'source_curator'
+  | 'strategist'
+  | 'strategy_approver'
+  | 'analyst'
+  | 'viewer'
+  | string;
+
+export interface WorkspaceMembership {
+  id: string;
+  workspaceId?: string;
+  workspace_id?: string;
+  userId: string;
+  user_id?: string;
+  role: WorkspaceRole;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
+export type WorkspaceReadinessState = 'complete' | 'attention' | 'missing';
+
+export interface WorkspaceReadinessItem {
+  id: string;
+  label: string;
+  state: WorkspaceReadinessState;
+  detail: string;
+  route: string;
+  actionLabel: string;
+}
+
+export interface WorkspaceReadinessSummary {
+  workspaceId?: string;
+  workspaceName?: string;
+  status: 'ready' | 'needs_review' | 'needs_setup';
+  headline: string;
+  recommendedRoute: string;
+  recommendedActionLabel: string;
+  counts: {
+    approvedThemes: number;
+    candidateThemes: number;
+    approvedSources: number;
+    suggestedSources: number;
+    documents: number;
+    extractedDocuments: number;
+    signals: number;
+    candidateTrends: number;
+    approvedTrends: number;
+    newFindings: number;
+    alerts: number;
+    monitoringRules: number;
+    workspaceMembers: number;
+  };
+  items: WorkspaceReadinessItem[];
+}
+
+export type FindingStatus = 'new' | 'approved' | 'dismissed' | 'merged' | 'escalated';
+export type FindingType =
+  | 'topic_candidate'
+  | 'merge_proposal'
+  | 'source_candidate'
+  | 'news_snippet'
+  | 'document_capture'
+  | 'signal'
+  | 'trend_candidate'
+  | 'trend_score_change'
+  | 'contradiction'
+  | 'strategic_action'
+  | string;
+
+export interface Finding {
+  id: string;
+  workspaceId?: string;
+  workspace_id?: string;
+  findingType: FindingType;
+  finding_type?: FindingType;
+  title: string;
+  summary: string;
+  whyItMatters?: string;
+  why_it_matters?: string;
+  evidenceSnippet?: string;
+  evidence_snippet?: string;
+  recommendedAction?: string;
+  recommended_action?: string;
+  status: FindingStatus;
+  confidenceScore?: number;
+  confidence_score?: number;
+  impactScore?: number;
+  impact_score?: number;
+  sourceId?: string;
+  source_id?: string;
+  documentId?: string;
+  document_id?: string;
+  signalId?: string;
+  signal_id?: string;
+  trendId?: string;
+  trend_id?: string;
+  discoveredAt?: string;
+  discovered_at?: string;
+  evidenceDate?: string;
+  evidence_date?: string;
+  retrievedAt?: string;
+  retrieved_at?: string;
+  reviewedAt?: string;
+  reviewed_at?: string;
+  reviewNote?: string;
+  review_note?: string;
+  metadata?: Record<string, any>;
+  metadata_json?: Record<string, any> | string;
+}
+
 export type SourceStatus = 'suggested' | 'approved' | 'rejected';
 export interface Source {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   name: string;
   url: string;
   sourceType: string;
@@ -33,11 +164,14 @@ export interface Source {
 export type TrendThemeStatus = 'suggested' | 'approved' | 'rejected';
 export interface TrendTheme {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   industryId?: string;
   industry_id?: string;
   name: string;
   description: string;
   keywords: string[];
+  aliases?: string[];
   status: TrendThemeStatus;
   origin: 'agent' | 'manual' | 'pipeline' | string;
   evidenceSummary?: string;
@@ -46,6 +180,44 @@ export interface TrendTheme {
   created_at?: string;
   updatedAt?: string;
   updated_at?: string;
+}
+
+export type WatchlistTopicState = 'needs_sources' | 'needs_evidence' | 'needs_trends' | 'needs_review' | 'active';
+
+export interface WatchlistTopicSummary {
+  theme: TrendTheme;
+  state: WatchlistTopicState;
+  sourceCount: number;
+  documentCount: number;
+  signalCount: number;
+  candidateTrendCount: number;
+  approvedTrendCount: number;
+  latestActivityAt?: string;
+  relatedSourceIds: string[];
+  relatedDocumentIds: string[];
+  relatedSignalIds: string[];
+  relatedTrendIds: string[];
+  recommendedAction: string;
+  recommendedRoute: string;
+}
+
+export type TopicTimelineEntryType = 'source' | 'document' | 'signal' | 'trend';
+
+export interface TopicTimelineEntry {
+  id: string;
+  type: TopicTimelineEntryType;
+  date: string;
+  title: string;
+  summary: string;
+  sourceName?: string;
+  documentTitle?: string;
+  status?: string;
+  route: string;
+}
+
+export interface TopicTimeline {
+  topic: WatchlistTopicSummary;
+  entries: TopicTimelineEntry[];
 }
 
 export interface NewsSnippet {
@@ -85,6 +257,8 @@ export interface NewsScanResult {
 
 export interface Document {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   sourceId: string;
   extractionRunId?: string;
   title: string;
@@ -97,6 +271,8 @@ export interface Document {
 
 export interface Signal {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   documentId: string;
   sourceId: string;
   extractionRunId?: string;
@@ -119,15 +295,22 @@ export interface AuditEvent {
   id: string;
   action: string;
   entity_type: string;
+  entityType?: string;
   entity_id: string;
+  entityId?: string;
   user_id: string;
+  userId?: string;
   details: string; // JSON string
   created_at: string;
+  createdAt?: string;
+  timestamp?: string;
 }
 
 export type TrendStatus = 'candidate' | 'approved' | 'rejected' | 'needs_review';
 export interface Trend {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   extractionRunId?: string;
   name: string;
   summary: string;
@@ -271,6 +454,31 @@ export interface TrendScoreChange {
   relatedSignalIds: string[];
 }
 
+export type TrendTimelineEntryType = 'score_change' | 'score_snapshot' | 'evidence' | 'decision';
+
+export interface TrendTimelineEntry {
+  id: string;
+  type: TrendTimelineEntryType;
+  date: string;
+  title: string;
+  summary: string;
+  impactScore?: number;
+  confidenceScore?: number;
+  movement?: 'up' | 'down' | 'flat';
+  sourceName?: string;
+  documentTitle?: string;
+  snippet?: string;
+}
+
+export interface TrendTimelineSummary {
+  trend: Trend;
+  entries: TrendTimelineEntry[];
+  latestImpactScore?: number;
+  latestConfidenceScore?: number;
+  evidenceCount: number;
+  sourceCount: number;
+}
+
 export interface Alert {
   id: string;
   trendId: string;
@@ -411,6 +619,8 @@ export type TimeToValue = 'now' | '3_months' | '6_months' | '12_months' | '24_mo
 
 export interface StrategicOption {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   title: string;
   description: string;
   optionType: OptionType;
@@ -446,10 +656,12 @@ export interface DecisionBrief {
 }
 
 export type RoadmapHorizon = 'now' | 'next' | 'later';
-export type RoadmapStatus = 'proposed' | 'accepted' | 'rejected' | 'in_progress';
+export type RoadmapStatus = 'proposed' | 'accepted' | 'rejected' | 'in_progress' | 'blocked' | 'completed';
 
 export interface RoadmapItem {
   id: string;
+  workspaceId?: string;
+  workspace_id?: string;
   strategicOptionId: string;
   title: string;
   horizon: RoadmapHorizon;
@@ -457,6 +669,29 @@ export interface RoadmapItem {
   status: RoadmapStatus;
   successMetric: string;
   linkedIndicatorIds: string[];
+  targetDate?: string;
+  target_date?: string;
+  progressPercent?: number;
+  progress_percent?: number;
+  progressNote?: string;
+  progress_note?: string;
+  lastReviewedAt?: string;
+  last_reviewed_at?: string;
+}
+
+export type StrategicActionHandoffState =
+  | 'needs_option'
+  | 'option_proposed'
+  | 'option_accepted'
+  | 'roadmap_planned';
+
+export interface StrategicActionHandoff {
+  trend: Trend;
+  state: StrategicActionHandoffState;
+  evidenceCount: number;
+  option?: StrategicOption;
+  roadmapItem?: RoadmapItem;
+  recommendedAction: string;
 }
 
 // ==============================

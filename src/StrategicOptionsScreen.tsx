@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { repository } from './repository';
 import { generateStrategicOptions } from './optionEngine';
+import { generateRoadmapItems } from './roadmapEngine';
 import type { StrategicOption, OptionType } from './types';
 
 const OPTION_ICONS: Record<OptionType, string> = {
@@ -36,6 +37,7 @@ const STATUS_OPTIONS = ['proposed', 'accepted', 'rejected', 'in_progress'] as co
 export default function StrategicOptionsScreen() {
   const [options, setOptions] = useState<StrategicOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
 
   const loadData = async () => {
     try {
@@ -67,8 +69,29 @@ export default function StrategicOptionsScreen() {
     await refresh();
   };
 
-  const handleStatusChange = async (id: string, status: string) => {
-    await repository.updateStrategicOption(id, { status: status as StrategicOption['status'] });
+  const acceptForRoadmap = async (option: StrategicOption) => {
+    await repository.updateStrategicOption(option.id, { status: 'accepted' });
+    const existingRoadmap = await repository.getRoadmapItems();
+    const roadmapId = `roadmap-${option.id}`;
+    if (existingRoadmap.some((item) => item.id === roadmapId || item.strategicOptionId === option.id)) {
+      setMessage(`${option.title} is already on the roadmap.`);
+      await refresh();
+      return;
+    }
+
+    const [roadmapItem] = generateRoadmapItems([{ ...option, status: 'accepted' }]);
+    await repository.saveRoadmapItems([roadmapItem]);
+    setMessage(`${option.title} accepted and added to roadmap.`);
+    await refresh();
+  };
+
+  const handleStatusChange = async (option: StrategicOption, status: string) => {
+    if (status === 'accepted') {
+      await acceptForRoadmap(option);
+      return;
+    }
+    await repository.updateStrategicOption(option.id, { status: status as StrategicOption['status'] });
+    setMessage('');
     await refresh();
   };
 
@@ -91,6 +114,11 @@ export default function StrategicOptionsScreen() {
       <p className="text-gray-400 text-sm mb-6">
         Prioritised strategic options — sorted by impact, feasibility, urgency and confidence.
       </p>
+      {message && (
+        <div role="status" className="mb-5 rounded-lg border border-green-700 bg-green-950 px-4 py-3 text-sm text-green-200">
+          {message}
+        </div>
+      )}
 
       {options.length === 0 && (
         <div className="text-center py-20 border border-dashed border-gray-700 rounded-xl">
@@ -164,13 +192,22 @@ export default function StrategicOptionsScreen() {
               <select
                 aria-label={`Status for ${option.id}`}
                 value={option.status ?? 'proposed'}
-                onChange={e => handleStatusChange(option.id, e.target.value)}
+                onChange={e => handleStatusChange(option, e.target.value)}
                 className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
               >
                 {STATUS_OPTIONS.map(s => (
                   <option key={s} value={s}>{s.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}</option>
                 ))}
               </select>
+              {(option.status ?? 'proposed') !== 'accepted' && (
+                <button
+                  type="button"
+                  onClick={() => acceptForRoadmap(option)}
+                  className="rounded bg-green-700 px-3 py-1 text-xs font-semibold text-white hover:bg-green-600"
+                >
+                  Accept for Roadmap
+                </button>
+              )}
             </div>
           </div>
         ))}

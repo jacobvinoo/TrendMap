@@ -29,11 +29,21 @@ import type {
   DecisionBrief,
   RoadmapItem,
   TrendTheme,
+  Workspace,
+  WorkspaceMembership,
+  Finding,
+  FindingStatus,
 } from './types';
+
+const DEFAULT_WORKSPACE_ID = 'workspace-default';
 
 declare global {
   // eslint-disable-next-line no-var
   var __mockRepoState: {
+    workspaces: Workspace[];
+    workspaceMembers: WorkspaceMembership[];
+    activeWorkspaceId?: string;
+    findings: Finding[];
     industryProfile: IndustryProfile | null;
     trendThemes: TrendTheme[];
     sources: Source[];
@@ -66,6 +76,98 @@ declare global {
   } | undefined;
 }
 
+function activeWorkspaceId(): string {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = window.localStorage.getItem('trendmap.activeWorkspaceId');
+    if (stored) {
+      globalThis.__mockRepoState!.activeWorkspaceId = stored;
+      return stored;
+    }
+  }
+  return globalThis.__mockRepoState!.activeWorkspaceId || DEFAULT_WORKSPACE_ID;
+}
+
+function itemWorkspaceId(item: { workspaceId?: string; workspace_id?: string } | null | undefined): string {
+  return item?.workspaceId || item?.workspace_id || DEFAULT_WORKSPACE_ID;
+}
+
+function belongsToActiveWorkspace<T extends { workspaceId?: string; workspace_id?: string }>(item: T): boolean {
+  if (!item?.workspaceId && !item?.workspace_id) return true;
+  return itemWorkspaceId(item) === activeWorkspaceId();
+}
+
+function withActiveWorkspace<T extends { workspaceId?: string; workspace_id?: string }>(item: T): T {
+  return { ...item, workspaceId: item.workspaceId || item.workspace_id || activeWorkspaceId() };
+}
+
+function uniqueId(prefix: string): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function topicTokens(value: string): Set<string> {
+  const synonymGroups: Record<string, string> = {
+    affordable: 'value',
+    affordability: 'value',
+    deal: 'value',
+    deals: 'value',
+    discount: 'value',
+    discounts: 'value',
+    price: 'value',
+    pricing: 'value',
+    promotion: 'value',
+    promotions: 'value',
+    shopper: 'customer',
+    shoppers: 'customer',
+    behaviour: 'customer',
+    behavior: 'customer',
+  };
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2)
+      .map((token) => synonymGroups[token] || token)
+      .filter((token) => !['and', 'the', 'for', 'with', 'into'].includes(token))
+  );
+}
+
+function themeText(theme: Partial<TrendTheme>): string {
+  return `${theme.name || ''} ${theme.description || ''} ${(theme.keywords || []).join(' ')} ${(theme.aliases || []).join(' ')}`;
+}
+
+function themeSimilarity(left: Partial<TrendTheme>, right: Partial<TrendTheme>): number {
+  const leftTokens = topicTokens(themeText(left));
+  const rightTokens = topicTokens(themeText(right));
+  if (!leftTokens.size || !rightTokens.size) return 0;
+  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  return intersection / union;
+}
+
+export function findSimilarApprovedTheme(candidate: Partial<TrendTheme>): { theme: TrendTheme; score: number } | null {
+  const matches = getTrendThemes()
+    .filter((theme) => theme.status === 'approved' && theme.name.toLowerCase() !== (candidate.name || '').toLowerCase())
+    .map((theme) => ({ theme, score: themeSimilarity(theme, candidate) }))
+    .sort((left, right) => right.score - left.score);
+  const best = matches[0];
+  return best && best.score >= 0.2 ? best : null;
+}
+
+export function addThemeAlias(themeId: string, alias: string, keywords: string[] = []): void {
+  const current = globalThis.__mockRepoState!.trendThemes || [];
+  const index = current.findIndex((theme) => theme.id === themeId);
+  if (index < 0 || !alias.trim()) return;
+  const theme = current[index];
+  const aliases = Array.from(new Set([...(theme.aliases || []), alias.trim()]));
+  const mergedKeywords = Array.from(new Set([...(theme.keywords || []), ...keywords]));
+  current[index] = { ...theme, aliases, keywords: mergedKeywords, updatedAt: new Date().toISOString() };
+  globalThis.__mockRepoState!.trendThemes = current;
+  persistState();
+}
+
 
 function persistState() {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -83,7 +185,22 @@ function initState() {
         try {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === 'object') {
-            globalThis.__mockRepoState = parsed;
+            globalThis.__mockRepoState = {
+              ...parsed,
+              workspaces: parsed.workspaces || [{
+                id: DEFAULT_WORKSPACE_ID,
+                name: 'Company-wide Trends',
+                purpose: 'Default trend analysis workspace',
+              }],
+              workspaceMembers: parsed.workspaceMembers || [{
+                id: 'member-default-owner',
+                workspaceId: DEFAULT_WORKSPACE_ID,
+                userId: 'user-default',
+                role: 'owner',
+              }],
+              activeWorkspaceId: parsed.activeWorkspaceId || DEFAULT_WORKSPACE_ID,
+              findings: parsed.findings || [],
+            };
             return;
           }
         } catch (e) {
@@ -92,6 +209,19 @@ function initState() {
       }
     }
     globalThis.__mockRepoState = {
+      workspaces: [{
+        id: DEFAULT_WORKSPACE_ID,
+        name: 'Company-wide Trends',
+        purpose: 'Default trend analysis workspace',
+      }],
+      workspaceMembers: [{
+        id: 'member-default-owner',
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        userId: 'user-default',
+        role: 'owner',
+      }],
+      activeWorkspaceId: DEFAULT_WORKSPACE_ID,
+      findings: [],
       industryProfile: null,
       trendThemes: [],
       sources: [],
@@ -145,6 +275,7 @@ export function resetMockData(options: { seed?: boolean } = {}) {
   if (typeof window !== 'undefined' && window.localStorage) {
     window.localStorage.removeItem('trendmap_mock_test');
     window.localStorage.removeItem('trendmap_mock_dev');
+    window.localStorage.setItem('trendmap.activeWorkspaceId', DEFAULT_WORKSPACE_ID);
   }
   initState();
   if (options.seed) seedData(true);
@@ -166,6 +297,7 @@ export function clearDynamicData() {
     globalThis.__mockRepoState!.strategicOptions = [];
     globalThis.__mockRepoState!.decisionBriefs = [];
     globalThis.__mockRepoState!.roadmapItems = [];
+    globalThis.__mockRepoState!.findings = [];
     persistState();
   }
 }
@@ -174,22 +306,181 @@ if (typeof window !== 'undefined') {
   (window as any).clearDynamicData = clearDynamicData;
 }
 
+// ----- Workspaces and Review Findings -----
+export function getWorkspaces(): Workspace[] {
+  return [...globalThis.__mockRepoState!.workspaces];
+}
+
+export function createWorkspace(workspace: Partial<Workspace>): Workspace {
+  const now = new Date().toISOString();
+  const created: Workspace = {
+    id: workspace.id || uniqueId('workspace'),
+    name: workspace.name || 'Untitled Workspace',
+    purpose: workspace.purpose || '',
+    currentUserRole: workspace.currentUserRole || 'owner',
+    ownerUserId: workspace.ownerUserId || workspace.owner_user_id,
+    createdAt: workspace.createdAt || now,
+    updatedAt: workspace.updatedAt || now,
+  };
+  globalThis.__mockRepoState!.workspaces.push(created);
+  globalThis.__mockRepoState!.workspaceMembers.push({
+    id: uniqueId('member'),
+    workspaceId: created.id,
+    userId: 'user-default',
+    role: 'owner',
+    createdAt: now,
+    updatedAt: now,
+  });
+  persistState();
+  return created;
+}
+
+export function getActiveWorkspace(): Workspace | null {
+  const id = activeWorkspaceId();
+  const workspace = globalThis.__mockRepoState!.workspaces.find((item) => item.id === id) || null;
+  return workspace ? { ...workspace, currentUserRole: workspace.currentUserRole || 'owner' } : null;
+}
+
+export function setActiveWorkspace(workspaceId: string): void {
+  if (!globalThis.__mockRepoState!.workspaces.some((workspace) => workspace.id === workspaceId)) {
+    throw new Error(`Workspace not found: ${workspaceId}`);
+  }
+  globalThis.__mockRepoState!.activeWorkspaceId = workspaceId;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem('trendmap.activeWorkspaceId', workspaceId);
+  }
+  persistState();
+}
+
+export function getWorkspaceMembers(workspaceId: string): WorkspaceMembership[] {
+  return globalThis.__mockRepoState!.workspaceMembers
+    .filter((member) => (member.workspaceId || member.workspace_id) === workspaceId)
+    .map((member) => ({ ...member }));
+}
+
+export function upsertWorkspaceMember(workspaceId: string, member: { userId: string; role: string }): WorkspaceMembership {
+  const now = new Date().toISOString();
+  const members = globalThis.__mockRepoState!.workspaceMembers;
+  const existing = members.find((item) => (item.workspaceId || item.workspace_id) === workspaceId && (item.userId || item.user_id) === member.userId);
+  const ownerCount = members.filter((item) => (item.workspaceId || item.workspace_id) === workspaceId && item.role === 'owner').length;
+  if (existing && existing.role === 'owner' && member.role !== 'owner' && ownerCount <= 1) {
+    throw new Error('A workspace must keep at least one owner.');
+  }
+  if (existing) {
+    existing.role = member.role;
+    existing.updatedAt = now;
+    persistState();
+    return { ...existing };
+  }
+  const created: WorkspaceMembership = {
+    id: uniqueId('member'),
+    workspaceId,
+    userId: member.userId,
+    role: member.role,
+    createdAt: now,
+    updatedAt: now,
+  };
+  members.push(created);
+  persistState();
+  return { ...created };
+}
+
+export function removeWorkspaceMember(workspaceId: string, userId: string): void {
+  const members = globalThis.__mockRepoState!.workspaceMembers;
+  const target = members.find((item) => (item.workspaceId || item.workspace_id) === workspaceId && (item.userId || item.user_id) === userId);
+  if (!target) return;
+  const ownerCount = members.filter((item) => (item.workspaceId || item.workspace_id) === workspaceId && item.role === 'owner').length;
+  if (target.role === 'owner' && ownerCount <= 1) {
+    throw new Error('A workspace must keep at least one owner.');
+  }
+  globalThis.__mockRepoState!.workspaceMembers = members.filter((item) => item !== target);
+  persistState();
+}
+
+export function getFindings(filters: { status?: FindingStatus | 'all' } = {}): Finding[] {
+  return globalThis.__mockRepoState!.findings
+    .filter(belongsToActiveWorkspace)
+    .filter((finding) => !filters.status || filters.status === 'all' || finding.status === filters.status)
+    .map((finding) => ({ ...finding }));
+}
+
+export function saveFinding(finding: Partial<Finding>): Finding {
+  const now = new Date().toISOString();
+  const created: Finding = withActiveWorkspace<Finding>({
+    id: finding.id || uniqueId('finding'),
+    findingType: finding.findingType || finding.finding_type || 'news_snippet',
+    title: finding.title || 'Untitled finding',
+    summary: finding.summary || '',
+    whyItMatters: finding.whyItMatters || finding.why_it_matters,
+    evidenceSnippet: finding.evidenceSnippet || finding.evidence_snippet,
+    recommendedAction: finding.recommendedAction || finding.recommended_action,
+    status: finding.status || 'new',
+    confidenceScore: finding.confidenceScore ?? finding.confidence_score,
+    impactScore: finding.impactScore ?? finding.impact_score,
+    sourceId: finding.sourceId || finding.source_id,
+    documentId: finding.documentId || finding.document_id,
+    signalId: finding.signalId || finding.signal_id,
+    trendId: finding.trendId || finding.trend_id,
+    discoveredAt: finding.discoveredAt || finding.discovered_at || now,
+    evidenceDate: finding.evidenceDate || finding.evidence_date,
+    retrievedAt: finding.retrievedAt || finding.retrieved_at,
+    reviewedAt: finding.reviewedAt || finding.reviewed_at,
+    reviewNote: finding.reviewNote || finding.review_note,
+    metadata: finding.metadata || (typeof finding.metadata_json === 'object' ? finding.metadata_json : undefined),
+  } as Finding);
+  globalThis.__mockRepoState!.findings.push(created);
+  persistState();
+  return created;
+}
+
+export function updateFinding(findingId: string, patch: Partial<Finding>): void {
+  const index = globalThis.__mockRepoState!.findings.findIndex((finding) => finding.id === findingId);
+  if (index < 0) return;
+  const existing = globalThis.__mockRepoState!.findings[index];
+  if (
+    existing.findingType === 'merge_proposal'
+    && patch.status === 'approved'
+    && existing.metadata?.canonicalThemeId
+    && existing.metadata?.candidateThemeName
+  ) {
+    addThemeAlias(
+      existing.metadata.canonicalThemeId,
+      existing.metadata.candidateThemeName,
+      existing.metadata.candidateKeywords || []
+    );
+    patch = { ...patch, status: 'merged' };
+  }
+  globalThis.__mockRepoState!.findings[index] = {
+    ...existing,
+    ...patch,
+    reviewedAt: patch.reviewedAt || patch.reviewed_at || new Date().toISOString(),
+  } as Finding;
+  persistState();
+}
+
 // ----- Industry -----
 export function getIndustryProfile(): IndustryProfile | null {
-  return globalThis.__mockRepoState!.industryProfile;
+  const profile = globalThis.__mockRepoState!.industryProfile;
+  if (!profile) return null;
+  return belongsToActiveWorkspace(profile) ? profile : null;
 }
 
 export function saveIndustryProfile(profile: IndustryProfile): void {
-  globalThis.__mockRepoState!.industryProfile = profile;
+  globalThis.__mockRepoState!.industryProfile = withActiveWorkspace(profile);
   persistState();
 }
 
 export function getTrendThemes(): TrendTheme[] {
-  return [...(globalThis.__mockRepoState!.trendThemes || [])];
+  return [...(globalThis.__mockRepoState!.trendThemes || []).filter(belongsToActiveWorkspace)];
 }
 
 export function saveTrendThemes(themes: TrendTheme[]): void {
-  globalThis.__mockRepoState!.trendThemes = themes;
+  const active = activeWorkspaceId();
+  const scoped = themes.map(withActiveWorkspace);
+  globalThis.__mockRepoState!.trendThemes = [
+    ...(globalThis.__mockRepoState!.trendThemes || []).filter((theme) => itemWorkspaceId(theme) !== active),
+    ...scoped,
+  ];
   persistState();
 }
 
@@ -205,7 +496,7 @@ export function updateTrendTheme(themeId: string, patch: Partial<TrendTheme>): v
 
 // ----- Sources -----
 export function getSources(): Source[] {
-  return [...globalThis.__mockRepoState!.sources];
+  return [...globalThis.__mockRepoState!.sources.filter(belongsToActiveWorkspace)];
 }
 
 export function updateSourceStatus(sourceId: string, status: SourceStatus): void {
@@ -227,7 +518,7 @@ export function updateSourceNote(sourceId: string, note: string): void {
 
 // ----- Documents -----
 export function getDocuments(): Document[] {
-  return [...globalThis.__mockRepoState!.documents];
+  return [...globalThis.__mockRepoState!.documents.filter(belongsToActiveWorkspace)];
 }
 
 export function updateDocumentIngestionStatus(documentId: string, status: string): void {
@@ -270,12 +561,13 @@ export function deleteDocument(documentId: string): void {
 
 // ----- Signals -----
 export function getSignals(): Signal[] {
-  return [...globalThis.__mockRepoState!.signals];
+  return [...globalThis.__mockRepoState!.signals.filter(belongsToActiveWorkspace)];
 }
 
 export function saveSignals(newSignals: Signal[]): void {
   const current = globalThis.__mockRepoState!.signals;
-  for (const s of newSignals) {
+  for (const incoming of newSignals) {
+    const s = withActiveWorkspace(incoming);
     const idx = current.findIndex(existing => existing.id === s.id);
     if (idx !== -1) {
       const existingLogs = current[idx].logs || [];
@@ -292,16 +584,17 @@ export function saveSignals(newSignals: Signal[]): void {
 
 // ----- Trends -----
 export function getTrends(): Trend[] {
-  return [...globalThis.__mockRepoState!.trends];
+  return [...globalThis.__mockRepoState!.trends.filter(belongsToActiveWorkspace)];
 }
 
 export function getTrendById(id: string): Trend | null {
-  return globalThis.__mockRepoState!.trends.find((t) => t.id === id) || null;
+  return globalThis.__mockRepoState!.trends.find((t) => t.id === id && belongsToActiveWorkspace(t)) || null;
 }
 
 export function saveTrends(newTrends: Trend[]): void {
   const current = globalThis.__mockRepoState!.trends;
-  for (const t of newTrends) {
+  for (const incoming of newTrends) {
+    const t = withActiveWorkspace(incoming);
     const idx = current.findIndex(existing => existing.id === t.id);
     if (idx !== -1) {
       // Preserve existing human-reviewed state (name, summary, status, etc)
@@ -340,7 +633,9 @@ export function getEvidences(): EvidenceLink[] {
 }
 
 export function getEvidenceForTrend(trendId: string): EvidenceLink[] {
-  return globalThis.__mockRepoState!.evidences.filter((e) => e.trendId === trendId);
+  const trend = globalThis.__mockRepoState!.trends.find((item) => item.id === trendId);
+  if (trend && !belongsToActiveWorkspace(trend)) return [];
+  return globalThis.__mockRepoState!.evidences.filter((e) => e.trendId === trendId || (e as any).trend_id === trendId);
 }
 
 export function addEvidence(evidence: EvidenceLink[]): void {
@@ -360,14 +655,15 @@ export function addEvidence(evidence: EvidenceLink[]): void {
 // ==========================================
 
 export function getMonitoringRules(): MonitoringRule[] {
-  return [...globalThis.__mockRepoState!.rules];
+  return [...globalThis.__mockRepoState!.rules.filter(belongsToActiveWorkspace as any)];
 }
 
 export function saveMonitoringRule(rule: MonitoringRule): void {
   const current = globalThis.__mockRepoState!.rules;
-  const idx = current.findIndex(r => r.id === rule.id);
-  if (idx !== -1) current[idx] = rule;
-  else current.push(rule);
+  const scoped = withActiveWorkspace(rule as any) as MonitoringRule;
+  const idx = current.findIndex(r => r.id === scoped.id);
+  if (idx !== -1) current[idx] = scoped;
+  else current.push(scoped);
   persistState();
 }
 
@@ -417,7 +713,7 @@ export function saveSourceSnapshot(snapshot: SourceSnapshot): void {
 }
 
 export function getChangeEvents(): ChangeEvent[] {
-  return [...globalThis.__mockRepoState!.changeEvents];
+  return [...globalThis.__mockRepoState!.changeEvents.filter(belongsToActiveWorkspace as any)];
 }
 
 export function saveChangeEvents(events: ChangeEvent[]): void {
@@ -564,14 +860,14 @@ export function saveScenarios(items: Scenario[]): void {
 }
 
 export function getStrategicOptions(): StrategicOption[] {
-  return [...globalThis.__mockRepoState!.strategicOptions];
+  return [...globalThis.__mockRepoState!.strategicOptions.filter((item) => belongsToActiveWorkspace(item))];
 }
 
 export function saveStrategicOptions(items: StrategicOption[]): void {
   const current = globalThis.__mockRepoState!.strategicOptions;
-  items.forEach(item => {
-    const idx = current.findIndex(a => a.id === item.id);
-    if (idx !== -1) current[idx] = item;
+  items.map((item) => withActiveWorkspace(item)).forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id && itemWorkspaceId(a) === itemWorkspaceId(item));
+    if (idx !== -1) current[idx] = { ...current[idx], ...item };
     else current.push(item);
   });
   persistState();
@@ -579,8 +875,8 @@ export function saveStrategicOptions(items: StrategicOption[]): void {
 
 export function updateStrategicOption(id: string, patch: Partial<StrategicOption>): void {
   const list = globalThis.__mockRepoState!.strategicOptions;
-  const idx = list.findIndex(o => o.id === id);
-  if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+  const idx = list.findIndex(o => o.id === id && belongsToActiveWorkspace(o));
+  if (idx !== -1) list[idx] = { ...list[idx], ...withActiveWorkspace(patch) };
   persistState();
 }
 
@@ -597,14 +893,14 @@ export function saveDecisionBrief(brief: DecisionBrief): void {
 }
 
 export function getRoadmapItems(): RoadmapItem[] {
-  return [...globalThis.__mockRepoState!.roadmapItems];
+  return [...globalThis.__mockRepoState!.roadmapItems.filter((item) => belongsToActiveWorkspace(item))];
 }
 
 export function saveRoadmapItems(items: RoadmapItem[]): void {
   const current = globalThis.__mockRepoState!.roadmapItems;
-  items.forEach(item => {
-    const idx = current.findIndex(a => a.id === item.id);
-    if (idx !== -1) current[idx] = item;
+  items.map((item) => withActiveWorkspace(item)).forEach(item => {
+    const idx = current.findIndex(a => a.id === item.id && itemWorkspaceId(a) === itemWorkspaceId(item));
+    if (idx !== -1) current[idx] = { ...current[idx], ...item };
     else current.push(item);
   });
   persistState();
@@ -612,23 +908,33 @@ export function saveRoadmapItems(items: RoadmapItem[]): void {
 
 export function updateRoadmapItem(id: string, patch: Partial<RoadmapItem>): void {
   const list = globalThis.__mockRepoState!.roadmapItems;
-  const idx = list.findIndex(r => r.id === id);
-  if (idx !== -1) list[idx] = { ...list[idx], ...patch };
+  const idx = list.findIndex(r => r.id === id && belongsToActiveWorkspace(r));
+  if (idx !== -1) list[idx] = { ...list[idx], ...withActiveWorkspace(patch) };
   persistState();
 }
 
 export function deleteSource(id: string): void {
-  globalThis.__mockRepoState!.sources = globalThis.__mockRepoState!.sources.filter((s) => s.id !== id);
+  globalThis.__mockRepoState!.sources = globalThis.__mockRepoState!.sources.filter((s) => s.id !== id || !belongsToActiveWorkspace(s));
   persistState();
 }
 
 export function saveSources(sources: any[]): void {
-  globalThis.__mockRepoState!.sources = sources;
+  const active = activeWorkspaceId();
+  const scoped = sources.map(withActiveWorkspace);
+  globalThis.__mockRepoState!.sources = [
+    ...globalThis.__mockRepoState!.sources.filter((source) => itemWorkspaceId(source) !== active),
+    ...scoped,
+  ];
   persistState();
 }
 
 export function saveDocuments(documents: any[]): void {
-  globalThis.__mockRepoState!.documents = documents;
+  const active = activeWorkspaceId();
+  const scoped = documents.map(withActiveWorkspace);
+  globalThis.__mockRepoState!.documents = [
+    ...globalThis.__mockRepoState!.documents.filter((document) => itemWorkspaceId(document) !== active),
+    ...scoped,
+  ];
   persistState();
 }
 

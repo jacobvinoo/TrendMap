@@ -199,5 +199,9 @@ describe('isValidRoadmapItem', () => {
   it('returns false when title is empty', () => expect(isValidRoadmapItem({ ...valid, title: '' })).toBe(false));
   it('returns false when horizon is invalid', () => expect(isValidRoadmapItem({ ...valid, horizon: 'someday' as any })).toBe(false));
   it('returns false when status is invalid', () => expect(isValidRoadmapItem({ ...valid, status: 'unknown' as any })).toBe(false));
+  it('accepts blocked and completed roadmap statuses', () => {
+    expect(isValidRoadmapItem({ ...valid, status: 'blocked' })).toBe(true);
+    expect(isValidRoadmapItem({ ...valid, status: 'completed' })).toBe(true);
+  });
   it('returns false when successMetric is empty', () => expect(isValidRoadmapItem({ ...valid, successMetric: '' })).toBe(false));
 });

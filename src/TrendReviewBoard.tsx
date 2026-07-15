@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Trend, EvidenceLink, TrendScoreSnapshot } from './types'; 
+import type { Trend, EvidenceLink, TrendScoreSnapshot, TrendScoreChange, Workspace } from './types'; 
 import LogViewerModal from './LogViewerModal';
 import { MovableModal } from './MovableModal';
 import {
@@ -12,6 +12,7 @@ import {
   sizeBusinessOpportunity,
   type BusinessOpportunityInputs,
 } from './trendOpportunity';
+import { createStrategicOptionFromTrend } from './strategicActionEngine';
 
 interface EvidenceWithTraceability extends EvidenceLink {
   sourceName?: string;
@@ -21,6 +22,7 @@ interface EvidenceWithTraceability extends EvidenceLink {
 }
 
 import { repository } from './repository';
+import { approvalRestrictionMessage, canApproveTrends } from './workspacePermissions';
 
 function entityId(value: any): string | undefined {
   if (!value) return undefined;
@@ -57,6 +59,37 @@ function formatReferenceDate(value?: string): string {
   return String(value).slice(0, 10);
 }
 
+function pct(value?: number): number {
+  return Math.round((value ?? 0) * 100);
+}
+
+function movementLabel(delta?: number): string {
+  if ((delta ?? 0) > 0.005) return 'increased';
+  if ((delta ?? 0) < -0.005) return 'decreased';
+  return 'stayed';
+}
+
+function evidenceSignalId(ev: any): string | undefined {
+  return ev.signalId ?? ev.signal_id ?? entityId(ev.signal);
+}
+
+function timelineEvidenceForChange(change: TrendScoreChange, evidence: EvidenceWithTraceability[]): EvidenceWithTraceability[] {
+  const relatedIds = new Set(change.relatedSignalIds || []);
+  const matched = evidence.filter((ev) => {
+    const signalId = evidenceSignalId(ev);
+    return signalId ? relatedIds.has(signalId) : false;
+  });
+  return matched.length ? matched : evidence;
+}
+
+function scoreMovementText(change: TrendScoreChange, previous?: TrendScoreSnapshot, current?: TrendScoreSnapshot): string {
+  const previousImportance = pct(previous?.impactScore);
+  const currentImportance = pct(current?.impactScore ?? change.newImpactScore);
+  const movement = movementLabel(change.impactDelta);
+  if (movement === 'stayed') return `Importance stayed at ${currentImportance}%.`;
+  return `Importance ${movement} from ${previousImportance}% to ${currentImportance}%.`;
+}
+
 /**
  * TrendReviewBoard – displays candidate trends and allows approve/reject/edit actions.
  * Provides an executive-level detailed review panel with evidence and strategic analysis.
@@ -68,8 +101,11 @@ const TrendReviewBoard: React.FC = () => {
   const [trendReferenceMap, setTrendReferenceMap] = useState<Record<string, EvidenceWithTraceability[]>>({});
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceWithTraceability[]>([]);
   const [scoreHistory, setScoreHistory] = useState<TrendScoreSnapshot[]>([]);
+  const [scoreChanges, setScoreChanges] = useState<TrendScoreChange[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [strategyMessage, setStrategyMessage] = useState('');
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
   
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -82,6 +118,7 @@ const TrendReviewBoard: React.FC = () => {
         repository.getDocuments(),
         repository.getSources(),
       ]);
+      setWorkspace(await repository.getActiveWorkspace());
       const map: Record<string, number> = {};
       const references: Record<string, EvidenceWithTraceability[]> = {};
       
@@ -154,24 +191,34 @@ const TrendReviewBoard: React.FC = () => {
   }, []);
 
   const handleApprove = async (id: string) => {
+    if (!canApproveTrends(workspace)) {
+      setStrategyMessage(approvalRestrictionMessage('trend'));
+      return;
+    }
     await repository.updateTrend(id, { status: 'approved' });
     await loadData();
   };
 
   const handleReject = async (id: string) => {
+    if (!canApproveTrends(workspace)) {
+      setStrategyMessage(approvalRestrictionMessage('trend'));
+      return;
+    }
     await repository.updateTrend(id, { status: 'rejected' });
     await loadData();
   };
 
   const handleSelect = async (trend: Trend) => {
-    const [docs, sources, evidence, scoreSnaps] = await Promise.all([
+    const [docs, sources, evidence, scoreSnaps, latestTrends] = await Promise.all([
       repository.getDocuments(),
       repository.getSources(),
       repository.getEvidenceForTrend(trend.id),
-      repository.getScoreHistory(trend.id)
+      repository.getScoreHistory(trend.id),
+      repository.getTrends(),
     ]);
+    const latestTrend = latestTrends.find((item) => item.id === trend.id) || trend;
 
-    setSelected(trend);
+    setSelected(latestTrend);
 
     const evLinks = evidence.map(ev => {
       const docId = evidenceDocumentId(ev);
@@ -188,13 +235,17 @@ const TrendReviewBoard: React.FC = () => {
     });
 
     const snaps = Array.isArray(scoreSnaps) ? scoreSnaps : (scoreSnaps.snapshots || []);
+    const changes = Array.isArray(scoreSnaps) ? [] : (scoreSnaps.changes || []);
     snaps.sort((a: any, b: any) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime());
+    changes.sort((a: any, b: any) => new Date(a.changedAt).getTime() - new Date(b.changedAt).getTime());
 
     setSelectedEvidence(evLinks);
     setScoreHistory(snaps);
-    setEditName(trend.name);
+    setScoreChanges(changes);
+    setEditName(latestTrend.name);
     setIsEditing(false);
     setShowHistory(false);
+    setStrategyMessage('');
   };
 
   const handleSaveEdit = async () => {
@@ -207,6 +258,22 @@ const TrendReviewBoard: React.FC = () => {
       await loadData();
     }
     setIsEditing(false);
+  };
+
+  const handleCreateStrategicOption = async (trend: Trend) => {
+    const option = createStrategicOptionFromTrend(trend, { evidenceCount: evidenceMap[trend.id] ?? selectedEvidence.length });
+    const existingOptions = await repository.getStrategicOptions();
+    const alreadyExists = existingOptions.some((existing) => existing.id === option.id);
+
+    if (!alreadyExists) {
+      await repository.saveStrategicOptions([option]);
+    }
+
+    setStrategyMessage(
+      alreadyExists
+        ? 'Strategic option already exists in this workspace. Open Strategy Options to continue planning.'
+        : 'Strategic option created. Open Strategy Options to refine owner, investment, timing, and roadmap fit.',
+    );
   };
 
   const approvedTrends = trends.filter(t => t.status === 'approved');
@@ -226,6 +293,11 @@ const TrendReviewBoard: React.FC = () => {
       </div>
 
       {showLogs && <LogViewerModal onClose={() => setShowLogs(false)} />}
+      {!selected && strategyMessage && (
+        <div role="status" style={{ marginBottom: '1rem', background: '#10291f', color: '#b6f3d0', border: '1px solid #1f7a4c', borderRadius: '6px', padding: '0.7rem 0.85rem', fontSize: '0.9rem' }}>
+          {strategyMessage}
+        </div>
+      )}
       
       {selected ? (
         // Executive Detail Panel
@@ -266,9 +338,23 @@ const TrendReviewBoard: React.FC = () => {
                   >
                     {showHistory ? 'View Details' : 'View History'}
                   </button>
+                  {selected.status === 'approved' && (
+                    <button
+                      type="button"
+                      onClick={() => handleCreateStrategicOption(selected)}
+                      style={{ padding: '0.3rem 0.6rem', background: '#3b2f71', color: '#f4f3ff', border: '1px solid #6d5dfc', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+                    >
+                      Create Strategic Option
+                    </button>
+                  )}
                 </div>
               )}
               <p style={{ color: '#aaa', fontSize: '1.1rem', marginTop: '0.5rem' }}>{selected.summary}</p>
+              {strategyMessage && (
+                <div role="status" style={{ marginTop: '0.75rem', background: '#10291f', color: '#b6f3d0', border: '1px solid #1f7a4c', borderRadius: '6px', padding: '0.7rem 0.85rem', fontSize: '0.9rem' }}>
+                  {strategyMessage}
+                </div>
+              )}
             </div>
             
             <button 
@@ -323,6 +409,50 @@ const TrendReviewBoard: React.FC = () => {
                   <p style={{ color: '#888', fontSize: '0.9rem' }}>No score history available.</p>
                 )}
               </div>
+
+              <div style={{ marginTop: '1.5rem' }}>
+                <h4 style={{ color: '#a0a0ff', margin: '0 0 1rem 0', borderBottom: '1px solid #2a2a4a', paddingBottom: '0.5rem' }}>Trend Development Timeline</h4>
+                {scoreChanges.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {scoreChanges.map((change) => {
+                      const previous = scoreHistory.find((snap) => snap.id === change.previousSnapshotId);
+                      const current = scoreHistory.find((snap) => snap.id === change.currentSnapshotId);
+                      const relatedEvidence = timelineEvidenceForChange(change, selectedEvidence);
+                      return (
+                        <div key={change.id} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '1rem', alignItems: 'start' }}>
+                          <div style={{ color: '#aaa', fontSize: '0.85rem' }}>
+                            {formatReferenceDate(change.changedAt)}
+                          </div>
+                          <div style={{ borderLeft: '3px solid #8b5cf6', paddingLeft: '1rem', background: '#13132b', borderRadius: '0 8px 8px 0', padding: '0.9rem 1rem' }}>
+                            <div style={{ color: '#fff', fontWeight: 700, marginBottom: '0.4rem' }}>
+                              {scoreMovementText(change, previous, current)}
+                            </div>
+                            <p style={{ color: '#c7c7e8', margin: '0 0 0.75rem 0', fontSize: '0.9rem' }}>
+                              {change.primaryReason || change.reason || 'Score changed based on the latest evidence review.'}
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                              {relatedEvidence.slice(0, 3).map((ev) => (
+                                <div key={`${change.id}-${ev.id}`} style={{ border: '1px solid #2a2a4a', borderRadius: '6px', padding: '0.75rem', background: '#10101f' }}>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', color: '#aaa', fontSize: '0.78rem', marginBottom: '0.45rem' }}>
+                                    <span><em>Source</em>: {ev.sourceName || evidenceSourceId(ev) || 'Unknown source'}</span>
+                                    <span><em>Document</em>: {ev.documentTitle || evidenceDocumentId(ev) || 'Unknown document'}</span>
+                                    <span><em>Evidence date</em>: {formatReferenceDate(ev.documentDate)}</span>
+                                  </div>
+                                  <div style={{ color: '#ddd', fontSize: '0.88rem', fontStyle: 'italic' }}>
+                                    {ev.quote}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ color: '#888', fontSize: '0.9rem' }}>No score movement events yet.</p>
+                )}
+              </div>
             </div>
 
             {/* Right Column: Evidence */}
@@ -366,6 +496,8 @@ const TrendReviewBoard: React.FC = () => {
               onApprove={handleApprove}
               onReject={handleReject}
               onSelect={handleSelect}
+              onCreateStrategicOption={handleCreateStrategicOption}
+              canApprove={canApproveTrends(workspace)}
             />
             <TrendImpactPlanning estimates={opportunityEstimates} referencesByTrend={trendReferenceMap} />
             <TrendSection
@@ -376,6 +508,8 @@ const TrendReviewBoard: React.FC = () => {
               onApprove={handleApprove}
               onReject={handleReject}
               onSelect={handleSelect}
+              onCreateStrategicOption={handleCreateStrategicOption}
+              canApprove={canApproveTrends(workspace)}
             />
           </div>
         )
@@ -915,6 +1049,8 @@ const TrendSection = ({
   onApprove,
   onReject,
   onSelect,
+  onCreateStrategicOption,
+  canApprove,
 }: {
   title: string;
   emptyText: string;
@@ -923,6 +1059,8 @@ const TrendSection = ({
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onSelect: (trend: Trend) => void;
+  onCreateStrategicOption: (trend: Trend) => void;
+  canApprove: boolean;
 }) => (
   <section>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -941,6 +1079,8 @@ const TrendSection = ({
             onApprove={onApprove}
             onReject={onReject}
             onSelect={onSelect}
+            onCreateStrategicOption={onCreateStrategicOption}
+            canApprove={canApprove}
           />
         ))}
       </div>
@@ -954,12 +1094,16 @@ const TrendCard = ({
   onApprove,
   onReject,
   onSelect,
+  onCreateStrategicOption,
+  canApprove,
 }: {
   trend: Trend;
   evidenceCount: number;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onSelect: (trend: Trend) => void;
+  onCreateStrategicOption: (trend: Trend) => void;
+  canApprove: boolean;
 }) => {
   const isApproved = trend.status === 'approved';
 
@@ -991,26 +1135,40 @@ const TrendCard = ({
       
       <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem', paddingTop: '1rem' }}>
         {isApproved ? (
-          <span style={{ flex: 1, padding: '0.5rem', background: '#163923', color: '#9ff3b0', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'center', fontWeight: 600 }}>
-            Approved
-          </span>
+          <>
+            <span style={{ flex: 1, padding: '0.5rem', background: '#163923', color: '#9ff3b0', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'center', fontWeight: 600 }}>
+              Approved
+            </span>
+            <button type="button" onClick={() => onCreateStrategicOption(trend)} style={btnStyle('#3b2f71', '#f4f3ff')}>
+              Create Strategic Option
+            </button>
+          </>
         ) : (
           <button 
             type="button" 
             data-testid={"trend-approve-" + trend.id} 
             aria-label="Approve" 
             onClick={() => onApprove(trend.id)} 
-            disabled={!evidenceCount}
+            disabled={!evidenceCount || !canApprove}
+            title={!canApprove ? approvalRestrictionMessage('trend') : !evidenceCount ? 'Trend needs linked evidence before approval.' : 'Approve trend'}
             style={btnStyle(
-              !evidenceCount ? '#2a2a2a' : '#2a4a2a', 
-              !evidenceCount ? '#555' : '#a0ffa0',
-              !evidenceCount
+              !evidenceCount || !canApprove ? '#2a2a2a' : '#2a4a2a', 
+              !evidenceCount || !canApprove ? '#555' : '#a0ffa0',
+              !evidenceCount || !canApprove
             )}
           >
             Approve
           </button>
         )}
-        <button type="button" data-testid={"trend-reject-" + trend.id} aria-label="Reject" onClick={() => onReject(trend.id)} style={btnStyle('#4a2a2a', '#ffa0a0')}>
+        <button
+          type="button"
+          data-testid={"trend-reject-" + trend.id}
+          aria-label="Reject"
+          onClick={() => onReject(trend.id)}
+          disabled={!canApprove}
+          title={!canApprove ? approvalRestrictionMessage('trend') : 'Reject trend'}
+          style={btnStyle(!canApprove ? '#2a2a2a' : '#4a2a2a', !canApprove ? '#555' : '#ffa0a0', !canApprove)}
+        >
           Reject
         </button>
         <button type="button" data-testid={"trend-detail-" + trend.id} aria-label="Details" onClick={() => onSelect(trend)} style={btnStyle('#2a2a4a', '#a0a0ff')}>

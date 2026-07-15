@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
 import { repository } from './repository';
-import type { Source, SourceStatus } from './types';
+import type { Source, SourceStatus, Workspace } from './types';
 import { eventBus } from './eventBus';
 import { Check, X, MessageSquarePlus, FileText, Globe, AlertTriangle, Trash2, Newspaper, Plus } from 'lucide-react';
+import { approvalRestrictionMessage, canApproveSources } from './workspacePermissions';
 
 const formatScore = (score: number) => `${Math.round(score * 100)}%`;
 
@@ -25,6 +26,7 @@ const getScoreColor = (score: number) => {
 
 const SourceLibrary: React.FC = () => {
   const [sources, setSources] = useState<Source[]>([]);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({});
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
@@ -41,7 +43,11 @@ const SourceLibrary: React.FC = () => {
 
   const refresh = async () => {
     try {
-      const data = await repository.getSources();
+      const [activeWorkspace, data] = await Promise.all([
+        repository.getActiveWorkspace(),
+        repository.getSources(),
+      ]);
+      setWorkspace(activeWorkspace);
       setSources(data);
     } catch (err) {
       console.error(err);
@@ -69,6 +75,10 @@ const SourceLibrary: React.FC = () => {
   }, []);
 
   const handleStatusChange = async (id: string, status: SourceStatus) => {
+    if (!canApproveSources(workspace)) {
+      setNotice(approvalRestrictionMessage('source'));
+      return;
+    }
     await repository.updateSourceStatus(id, status);
     await refresh();
   };
@@ -119,7 +129,7 @@ const SourceLibrary: React.FC = () => {
         name,
         url,
         sourceType: manualSource.sourceType,
-        status: manualSource.status,
+        status: canApproveSources(workspace) ? manualSource.status : 'suggested',
         credibilityScore: 0.7,
         relevanceScore: 0.7,
         freshnessScore: 0.7,
@@ -136,6 +146,7 @@ const SourceLibrary: React.FC = () => {
 
   const pending = sources.filter(s => s.status === 'suggested');
   const reviewed = sources.filter(s => s.status !== 'suggested');
+  const canReviewSources = canApproveSources(workspace);
 
   const renderSourceCard = (src: Source) => {
     const isRejected = src.status === 'rejected';
@@ -246,7 +257,9 @@ const SourceLibrary: React.FC = () => {
                 type="button"
                 aria-label="Approve"
                 onClick={() => handleStatusChange(src.id, 'approved')}
-                className="flex-1 flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                disabled={!canReviewSources}
+                title={!canReviewSources ? approvalRestrictionMessage('source') : 'Approve source'}
+                className="flex-1 flex items-center justify-center gap-2 bg-green-600/20 hover:bg-green-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-green-400 border border-green-600/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
               >
                 <Check size={16} /> Approve
               </button>
@@ -254,7 +267,9 @@ const SourceLibrary: React.FC = () => {
                 type="button"
                 aria-label="Reject"
                 onClick={() => handleStatusChange(src.id, 'rejected')}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                disabled={!canReviewSources}
+                title={!canReviewSources ? approvalRestrictionMessage('source') : 'Reject source'}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600/20 hover:bg-red-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-red-400 border border-red-600/30 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
               >
                 <X size={16} /> Reject
               </button>
@@ -369,11 +384,15 @@ const SourceLibrary: React.FC = () => {
                   <select
                     value={manualSource.status}
                     onChange={(event) => setManualSource({ ...manualSource, status: event.target.value as SourceStatus })}
+                    disabled={!canReviewSources}
                     className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="approved">Approved</option>
                     <option value="suggested">Suggested</option>
                   </select>
+                  {!canReviewSources && (
+                    <p className="mt-1 text-xs text-amber-200">Your role can add source suggestions. A source curator, admin, or owner must approve them.</p>
+                  )}
                 </label>
                 <label className="block md:col-span-2">
                   <span className="mb-1 block text-sm font-medium text-gray-300">Notes</span>

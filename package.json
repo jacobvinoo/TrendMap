@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "sh -c 'cd backend && python manage.py migrate --noinput && python manage.py runserver 127.0.0.1:8000 & backend_pid=$!; trap \"kill $backend_pid\" EXIT INT TERM; vite --host 127.0.0.1'",
+    "dev": "sh -c 'cd backend && python manage.py migrate --noinput && python manage.py runserver 127.0.0.1:${TRENDMAP_BACKEND_PORT:-8010} & backend_pid=$!; trap \"kill $backend_pid\" EXIT INT TERM; vite --host 127.0.0.1 \"$@\"' --",
     "dev:api": "npm run dev",
-    "dev:backend": "cd backend && python manage.py migrate --noinput && python manage.py runserver 127.0.0.1:8000",
+    "dev:backend": "cd backend && python manage.py migrate --noinput && python manage.py runserver 127.0.0.1:${TRENDMAP_BACKEND_PORT:-8010}",
     "test:backend": "cd backend && python manage.py test trendmap_api",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

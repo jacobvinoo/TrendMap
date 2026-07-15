@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, beforeEach } from 'vitest';
 import TrendReviewBoard from './TrendReviewBoard';
-import { resetMockData, getTrends, saveTrends, addEvidence, saveTrendScoreSnapshot, saveSources, saveDocuments } from './mockRepository';
+import { resetMockData, getTrends, saveTrends, addEvidence, saveTrendScoreSnapshot, saveTrendScoreChange, saveSources, saveDocuments, getStrategicOptions } from './mockRepository';
 
 describe('TrendReviewBoard', () => {
   beforeEach(() => {
@@ -144,6 +144,27 @@ describe('TrendReviewBoard', () => {
     expect(screen.getByText(/Addressable base/i)).toBeInTheDocument();
   });
 
+  it('creates a proposed strategic option from an approved trend', async () => {
+    render(<TrendReviewBoard />);
+
+    const approveBtns = await screen.findAllByRole('button', { name: /approve/i });
+    fireEvent.click(approveBtns[0]);
+
+    const detailsBtns = await screen.findAllByRole('button', { name: /details/i });
+    fireEvent.click(detailsBtns[0]);
+
+    fireEvent.click(await screen.findByRole('button', { name: /create strategic option/i }));
+
+    await waitFor(() => {
+      const options = getStrategicOptions();
+      expect(options).toHaveLength(1);
+      expect(options[0].title).toMatch(/Testing Trend/i);
+      expect(options[0].linkedTrendIds).toEqual(['t1']);
+      expect(options[0].status).toBe('proposed');
+      expect(screen.getByText(/Strategic option created/i)).toBeInTheDocument();
+    });
+  });
+
   it('rejects a trend and removes from board', async () => {
     render(<TrendReviewBoard />);
     
@@ -181,6 +202,54 @@ describe('TrendReviewBoard', () => {
     // Since text is split into a span and text node, we just check for the percentages or use a custom function
     expect(screen.getAllByText(/70%/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/50%/i).length).toBeGreaterThan(0);
+  });
+
+  it('shows a readable trend development timeline with score movement and linked evidence', async () => {
+    saveTrendScoreSnapshot({
+      id: 'snap-2',
+      trendId: 't1',
+      capturedAt: '2026-02-01T12:00:00Z',
+      likelihoodScore: 0.76,
+      confidenceScore: 0.82,
+      momentumScore: 0.68,
+      impactScore: 0.94,
+      horizon: '2-3 years',
+      maturityStage: 'emerging',
+      evidenceCount: 2,
+      signalCount: 1,
+      sourceDiversity: 1,
+      reason: 'New high-quality evidence strengthened confidence.',
+    });
+    saveTrendScoreChange({
+      id: 'change-1',
+      trendId: 't1',
+      previousSnapshotId: 'snap-1',
+      currentSnapshotId: 'snap-2',
+      changedAt: '2026-02-01T12:30:00Z',
+      likelihoodDelta: 0.06,
+      confidenceDelta: 0.12,
+      impactDelta: 0.04,
+      newConfidenceScore: 0.82,
+      newMomentumScore: 0.68,
+      newImpactScore: 0.94,
+      primaryReason: 'New high-quality grocery search evidence strengthened confidence.',
+      horizonChanged: false,
+      maturityChanged: false,
+      reason: 'New high-quality grocery search evidence strengthened confidence.',
+      relatedSignalIds: ['s-test-1'],
+    });
+
+    render(<TrendReviewBoard />);
+
+    const detailsBtns = await screen.findAllByRole('button', { name: /details/i });
+    fireEvent.click(detailsBtns[0]);
+
+    expect(await screen.findByText('Trend Development Timeline')).toBeInTheDocument();
+    expect(screen.getByText(/Importance increased from 90% to 94%/i)).toBeInTheDocument();
+    expect(screen.getByText(/New high-quality grocery search evidence strengthened confidence/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Retail Technology News/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/AI grocery discovery evidence brief/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/This is a test quote/i).length).toBeGreaterThan(0);
   });
 
   it('allows inline editing of trend name', async () => {

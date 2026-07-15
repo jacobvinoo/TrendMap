@@ -4,11 +4,71 @@ import type {
   SemanticSearchResult, DataExportResult, DataHealthSummary, DataImportResult, DataClearResult,
   ForecastCalibrationResult, KnowledgeGraphBuildResult, KnowledgeGraphNeighborhood, SourceReliabilityResult, InsightSummary,
   AuditEvent, NewsScanResult
+  , Workspace, WorkspaceMembership, Finding, FindingStatus, WorkspaceReadinessSummary
 } from '../types';
 import * as mockRepo from '../mockRepository';
 import { generateInsightSummary } from '../insightSummary';
+import { buildWorkspaceReadiness } from '../workspaceReadiness';
 
 export class LocalMockRepository implements TrendMapRepository {
+  async getWorkspaces(): Promise<Workspace[]> {
+    return mockRepo.getWorkspaces();
+  }
+
+  async createWorkspace(workspace: Partial<Workspace>): Promise<Workspace> {
+    return mockRepo.createWorkspace(workspace);
+  }
+
+  async getActiveWorkspace(): Promise<Workspace | null> {
+    return mockRepo.getActiveWorkspace();
+  }
+
+  async setActiveWorkspace(workspaceId: string): Promise<void> {
+    mockRepo.setActiveWorkspace(workspaceId);
+  }
+
+  async getWorkspaceMembers(workspaceId: string): Promise<WorkspaceMembership[]> {
+    return mockRepo.getWorkspaceMembers(workspaceId);
+  }
+
+  async upsertWorkspaceMember(workspaceId: string, member: { userId: string; role: string }): Promise<WorkspaceMembership> {
+    return mockRepo.upsertWorkspaceMember(workspaceId, member);
+  }
+
+  async removeWorkspaceMember(workspaceId: string, userId: string): Promise<void> {
+    mockRepo.removeWorkspaceMember(workspaceId, userId);
+  }
+
+  async getWorkspaceReadiness(): Promise<WorkspaceReadinessSummary> {
+    const workspace = mockRepo.getActiveWorkspace();
+    return buildWorkspaceReadiness({
+      workspace,
+      industryProfile: mockRepo.getIndustryProfile(),
+      themes: mockRepo.getTrendThemes(),
+      findings: mockRepo.getFindings({ status: 'new' }),
+      sources: mockRepo.getSources(),
+      documents: mockRepo.getDocuments(),
+      signals: mockRepo.getSignals(),
+      trends: mockRepo.getTrends(),
+      alerts: mockRepo.getAlerts(),
+      monitoringRules: mockRepo.getMonitoringRules(),
+      strategicContext: mockRepo.getStrategicContext(),
+      members: workspace ? mockRepo.getWorkspaceMembers(workspace.id) : [],
+    });
+  }
+
+  async getFindings(filters: { status?: FindingStatus | 'all' } = {}): Promise<Finding[]> {
+    return mockRepo.getFindings(filters);
+  }
+
+  async createFinding(finding: Partial<Finding>): Promise<Finding> {
+    return mockRepo.saveFinding(finding);
+  }
+
+  async updateFinding(findingId: string, patch: Partial<Finding>): Promise<void> {
+    mockRepo.updateFinding(findingId, patch);
+  }
+
   async getIndustryProfile(): Promise<IndustryProfile | null> {
     return mockRepo.getIndustryProfile();
   }
@@ -76,17 +136,41 @@ export class LocalMockRepository implements TrendMapRepository {
   async createTrendTheme(theme: Partial<TrendTheme>): Promise<TrendTheme> {
     const now = new Date().toISOString();
     const created: TrendTheme = {
-      id: theme.id || `theme-manual-${Date.now()}`,
+      id: theme.id || `theme-manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       industryId: theme.industryId,
       name: theme.name || 'Manual theme',
       description: theme.description || '',
       keywords: theme.keywords || [],
+      aliases: theme.aliases || [],
       status: theme.status || 'approved',
       origin: theme.origin || 'manual',
       evidenceSummary: theme.evidenceSummary || '',
       createdAt: now,
       updatedAt: now,
     };
+    const similar = mockRepo.findSimilarApprovedTheme(created);
+    if (similar) {
+      await this.createFinding({
+        findingType: 'merge_proposal',
+        title: `Merge ${created.name} into ${similar.theme.name}`,
+        summary: `"${created.name}" appears to overlap with the approved topic "${similar.theme.name}".`,
+        whyItMatters: 'Merging keeps the topic timeline, evidence score, and downstream strategy work from fragmenting.',
+        evidenceSnippet: `Shared strategic language across candidate and canonical topic. Similarity score: ${Math.round(similar.score * 100)}%.`,
+        recommendedAction: `Merge into "${similar.theme.name}" and preserve "${created.name}" as an alias.`,
+        status: 'new',
+        confidenceScore: Math.min(0.95, Math.max(0.65, similar.score + 0.45)),
+        impactScore: 0.7,
+        metadata: {
+          canonicalThemeId: similar.theme.id,
+          canonicalThemeName: similar.theme.name,
+          candidateThemeName: created.name,
+          candidateDescription: created.description,
+          candidateKeywords: created.keywords,
+          similarityScore: similar.score,
+        },
+      });
+      return similar.theme;
+    }
     mockRepo.saveTrendThemes([...mockRepo.getTrendThemes(), created]);
     return created;
   }
@@ -208,6 +292,32 @@ export class LocalMockRepository implements TrendMapRepository {
     });
   }
 
+  async refreshDocumentContent(documentId: string): Promise<Document> {
+    const document = mockRepo.getDocuments().find((item) => item.id === documentId);
+    if (!document) throw new Error(`Document not found: ${documentId}`);
+    const refreshed = {
+      ...document,
+      content: document.content || `Browser storage cannot fetch ${document.url || 'this link'} directly. Restart with npm run dev so the backend can capture the article text.`,
+      ingestionStatus: 'raw',
+    };
+    mockRepo.saveDocuments(mockRepo.getDocuments().map((item) => item.id === documentId ? refreshed : item));
+    return refreshed;
+  }
+
+  async updateDocumentContent(documentId: string, content: string): Promise<Document> {
+    const document = mockRepo.getDocuments().find((item) => item.id === documentId);
+    if (!document) throw new Error(`Document not found: ${documentId}`);
+    const updated = {
+      ...document,
+      content,
+      ingestionStatus: 'raw',
+      extractedSignalIds: [],
+    };
+    mockRepo.saveDocuments(mockRepo.getDocuments().map((item) => item.id === documentId ? updated : item));
+    mockRepo.saveSignals(mockRepo.getSignals().filter((signal) => signal.documentId !== documentId));
+    return updated;
+  }
+
   async deleteDocument(documentId: string): Promise<void> {
     mockRepo.deleteDocument(documentId);
   }
@@ -229,6 +339,10 @@ export class LocalMockRepository implements TrendMapRepository {
   }
 
   async getSignalHistory(_signalId: string): Promise<AuditEvent[]> {
+    return [];
+  }
+
+  async getAuditEvents(): Promise<AuditEvent[]> {
     return [];
   }
 

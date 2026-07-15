@@ -3,20 +3,26 @@ import { Menu, X, Compass, Activity, Target, Database, PanelLeftClose, PanelLeft
 import './App.css';
 import IndustrySetup from './IndustrySetup';
 import TrendThemesScreen from './TrendThemesScreen';
+import WatchlistTopicsScreen from './WatchlistTopicsScreen';
+import NewFindingsScreen from './NewFindingsScreen';
 import SourceLibrary from './SourceLibrary';
 import DocumentIntake from './DocumentIntake';
 import SignalsScreen from './SignalsScreen';
 import TrendReviewBoard from './TrendReviewBoard';
 import InsightsScreen from './InsightsScreen';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 
 import MonitoringScreen from './MonitoringScreen';
 import MonitoringDashboard from './MonitoringDashboard';
+import TopicTimelineScreen from './TopicTimelineScreen';
+import TrendTimelineScreen from './TrendTimelineScreen';
 import AlertsScreen from './AlertsScreen';
 import StrategyScreen from './StrategyScreen';
 import AssumptionsScreen from './AssumptionsScreen';
 import AssumptionMonitorPanel from './AssumptionMonitorPanel';
 import ImplicationsScreen from './ImplicationsScreen';
 import ScenariosScreen from './ScenariosScreen';
+import StrategicActionsScreen from './StrategicActionsScreen';
 import StrategicOptionsScreen from './StrategicOptionsScreen';
 import DecisionBriefScreen from './DecisionBriefScreen';
 import RoadmapScreen from './RoadmapScreen';
@@ -25,7 +31,11 @@ import AgentDebateScreen from './AgentDebateScreen';
 import PredictionTimelineScreen from './PredictionTimelineScreen';
 import SemanticSearchScreen from './SemanticSearchScreen';
 import AdminDataHealthScreen from './AdminDataHealthScreen';
+import AuditTrailScreen from './AuditTrailScreen';
+import WorkspaceMembersScreen from './WorkspaceMembersScreen';
+import OperationsOverviewScreen from './OperationsOverviewScreen';
 import { BrainCircuit } from 'lucide-react';
+import type { Workspace } from './types';
 
 // Lazy-load the debug panel – only bundled in dev
 const LazyTraceabilityPanel = import.meta.env.DEV
@@ -36,11 +46,13 @@ const LazyTraceabilityPanel = import.meta.env.DEV
     )
   : null;
 
-type Tab = 'setup' | 'themes' | 'sources' | 'documents' | 'signals' | 'trends' | 'insights'
+type Tab = 'setup' | 'themes' | 'watchlist' | 'findings' | 'sources' | 'documents' | 'signals' | 'trends' | 'insights'
   | 'dashboard' | 'rules' | 'alerts'
+  | 'topic-timeline' | 'trend-timeline'
   | 'strategy' | 'assumptions' | 'indicators' | 'implications' | 'scenarios' | 'options' | 'brief' | 'roadmap'
+  | 'strategic-actions'
   | 'agent-activity' | 'prediction-timeline' | 'agent-debate'
-  | 'semantic-search' | 'data-health'
+  | 'operations' | 'semantic-search' | 'data-health' | 'audit' | 'members'
   | 'debug-traceability';
 
 const PHASES = [
@@ -51,6 +63,8 @@ const PHASES = [
     tabs: [
       { id: 'setup',    label: 'Industry Setup' },
       { id: 'themes',   label: 'Themes' },
+      { id: 'watchlist', label: 'Watchlist' },
+      { id: 'findings', label: 'New Findings' },
       { id: 'sources',  label: 'Sources' },
       { id: 'documents',label: 'Documents' },
       { id: 'signals',  label: 'Signals' },
@@ -64,6 +78,8 @@ const PHASES = [
     icon: Activity,
     tabs: [
       { id: 'dashboard', label: 'Dashboard' },
+      { id: 'topic-timeline', label: 'Topic Timeline' },
+      { id: 'trend-timeline', label: 'Trend Timeline' },
       { id: 'rules',     label: 'Rules Engine' },
       { id: 'alerts',    label: 'Alerts' },
     ]
@@ -78,6 +94,7 @@ const PHASES = [
       { id: 'indicators',  label: 'Indicators' },
       { id: 'implications',label: 'Implications' },
       { id: 'scenarios',   label: 'Scenarios' },
+      { id: 'strategic-actions', label: 'Strategic Actions' },
       { id: 'options',     label: 'Options' },
       { id: 'brief',       label: 'Decision Brief' },
       { id: 'roadmap',     label: 'Roadmap' },
@@ -98,8 +115,11 @@ const PHASES = [
     title: 'Phase 5: Operations',
     icon: Database,
     tabs: [
+      { id: 'operations', label: 'Overview' },
       { id: 'semantic-search', label: 'Semantic Search' },
       { id: 'data-health', label: 'Data Health' },
+      { id: 'members', label: 'Members' },
+      { id: 'audit', label: 'Audit Trail' },
     ]
   }
 ];
@@ -123,6 +143,7 @@ function App() {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('trendmap.sidebarCollapsed') === 'true';
   });
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
 
   // Keep tab state in sync with browser back/forward navigation
   useEffect(() => {
@@ -255,6 +276,7 @@ function App() {
 
       {/* ── Main Content Area ─────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#0f0f1a] relative z-0">
+        <WorkspaceSwitcher onWorkspaceChange={setActiveWorkspace} />
         
         {/* Secondary Tab Bar (Sub-navigation) */}
         {activeTab !== 'debug-traceability' && activePhase && (
@@ -278,9 +300,11 @@ function App() {
         )}
 
         {/* Screen Container */}
-        <main className="flex-1 overflow-y-auto">
+        <main key={activeWorkspace?.id || 'workspace-pending'} className="flex-1 overflow-y-auto">
           {activeTab === 'setup'    && <IndustrySetup />}
           {activeTab === 'themes'   && <TrendThemesScreen />}
+          {activeTab === 'watchlist' && <WatchlistTopicsScreen />}
+          {activeTab === 'findings' && <NewFindingsScreen />}
           {activeTab === 'sources'  && <SourceLibrary />}
           {activeTab === 'documents'&& <DocumentIntake />}
           {activeTab === 'signals'  && <SignalsScreen />}
@@ -289,6 +313,8 @@ function App() {
           
           {/* Phase 2 screens */}
           {activeTab === 'dashboard' && <MonitoringDashboard />}
+          {activeTab === 'topic-timeline' && <TopicTimelineScreen />}
+          {activeTab === 'trend-timeline' && <TrendTimelineScreen />}
           {activeTab === 'rules' && <MonitoringScreen />}
           {activeTab === 'alerts'   && <AlertsScreen />}
           
@@ -298,6 +324,7 @@ function App() {
           {activeTab === 'indicators'   && <AssumptionMonitorPanel />}
           {activeTab === 'implications' && <ImplicationsScreen />}
           {activeTab === 'scenarios'    && <ScenariosScreen />}
+          {activeTab === 'strategic-actions' && <StrategicActionsScreen />}
           {activeTab === 'options'      && <StrategicOptionsScreen />}
           {activeTab === 'brief'        && <DecisionBriefScreen />}
           {activeTab === 'roadmap'      && <RoadmapScreen />}
@@ -308,8 +335,11 @@ function App() {
           {activeTab === 'prediction-timeline' && <PredictionTimelineScreen />}
 
           {/* Phase 5 screens */}
+          {activeTab === 'operations' && <OperationsOverviewScreen />}
           {activeTab === 'semantic-search' && <SemanticSearchScreen />}
           {activeTab === 'data-health' && <AdminDataHealthScreen />}
+          {activeTab === 'members' && <WorkspaceMembersScreen />}
+          {activeTab === 'audit' && <AuditTrailScreen />}
           
           {activeTab === 'debug-traceability' && LazyTraceabilityPanel && (
             <Suspense fallback={<p className="p-6 text-gray-400">Loading traceability panel...</p>}>

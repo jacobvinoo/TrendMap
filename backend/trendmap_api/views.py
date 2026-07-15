@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.http import StreamingHttpResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.middleware.csrf import get_token
@@ -12,7 +13,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from html import unescape
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
-from urllib.parse import quote_plus, urljoin, urlparse
+from urllib.parse import quote_plus, urljoin, urlparse, urlunparse
 from xml.etree import ElementTree
 from email.utils import parsedate_to_datetime
 from datetime import datetime, time as datetime_time
@@ -80,11 +81,12 @@ def cluster_trend(request):
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(serializer.data)
-from .models import Industry, Source, Document, Signal, Trend, TrendTheme, ExtractionRun, NewsScanRun, NewsSnippet, AgentActivity, AgentDebate, Alert, Assumption, AuditEvent, ChangeEvent, DataExport, DecisionBrief, Embedding, EvidenceLink, HealthCheck, KgEdge, KgNode, LeadingIndicator, MonitoringRule, MonitoringRun, PredictionOutcome, PredictionUpdate, Prediction, RoadmapItem, Scenario, SourceSnapshot, StrategicContext, StrategicImplication, StrategicOption, TrendScoreChange, TrendScoreSnapshot, WhatChangedSummary
+from .models import Industry, Source, Document, Signal, Trend, TrendTheme, ExtractionRun, NewsScanRun, NewsSnippet, AgentActivity, AgentDebate, Alert, Assumption, AuditEvent, ChangeEvent, DataExport, DecisionBrief, Embedding, EvidenceLink, HealthCheck, KgEdge, KgNode, LeadingIndicator, MonitoringRule, MonitoringRun, PredictionOutcome, PredictionUpdate, Prediction, RoadmapItem, Scenario, SourceSnapshot, StrategicContext, StrategicImplication, StrategicOption, TrendScoreChange, TrendScoreSnapshot, WhatChangedSummary, Workspace, WorkspaceMembership, Finding
 from .source_utils import normalize_source_url, preferred_source
 from .serializers import (
     IndustrySerializer, SourceSerializer, DocumentSerializer, 
-    SignalSerializer, TrendSerializer, TrendThemeSerializer, NewsScanRunSerializer, NewsSnippetSerializer, AgentActivitySerializer, AgentDebateSerializer, AlertSerializer, AssumptionSerializer, AuditEventSerializer, ChangeEventSerializer, DataExportSerializer, DecisionBriefSerializer, EmbeddingSerializer, EvidenceLinkSerializer, HealthCheckSerializer, KgEdgeSerializer, KgNodeSerializer, LeadingIndicatorSerializer, MonitoringRuleSerializer, MonitoringRunSerializer, PredictionOutcomeSerializer, PredictionUpdateSerializer, PredictionSerializer, RoadmapItemSerializer, ScenarioSerializer, SourceSnapshotSerializer, StrategicContextSerializer, StrategicImplicationSerializer, StrategicOptionSerializer, TrendScoreChangeSerializer, TrendScoreSnapshotSerializer, WhatChangedSummarySerializer
+    SignalSerializer, TrendSerializer, TrendThemeSerializer, NewsScanRunSerializer, NewsSnippetSerializer, AgentActivitySerializer, AgentDebateSerializer, AlertSerializer, AssumptionSerializer, AuditEventSerializer, ChangeEventSerializer, DataExportSerializer, DecisionBriefSerializer, EmbeddingSerializer, EvidenceLinkSerializer, HealthCheckSerializer, KgEdgeSerializer, KgNodeSerializer, LeadingIndicatorSerializer, MonitoringRuleSerializer, MonitoringRunSerializer, PredictionOutcomeSerializer, PredictionUpdateSerializer, PredictionSerializer, RoadmapItemSerializer, ScenarioSerializer, SourceSnapshotSerializer, StrategicContextSerializer, StrategicImplicationSerializer, StrategicOptionSerializer, TrendScoreChangeSerializer, TrendScoreSnapshotSerializer, WhatChangedSummarySerializer, WorkspaceSerializer, FindingSerializer
+    , WorkspaceMembershipSerializer
 )
 
 
@@ -199,17 +201,95 @@ ANALYSIS_CLEAR_TARGETS = [
 ]
 
 
+def analysis_clear_querysets(workspace=None):
+    if workspace is None:
+        return {label: model.objects.all() for label, model in ANALYSIS_CLEAR_TARGETS}
+
+    documents = Document.objects.filter(
+        Q(workspace=workspace) | Q(source__workspace=workspace) | Q(extraction_run__industry__workspace=workspace)
+    )
+    signals = Signal.objects.filter(
+        Q(workspace=workspace)
+        | Q(document__in=documents)
+        | Q(source__workspace=workspace)
+        | Q(extraction_run__industry__workspace=workspace)
+    )
+    trends = Trend.objects.filter(
+        Q(workspace=workspace) | Q(extraction_run__industry__workspace=workspace)
+    )
+    evidence_links = EvidenceLink.objects.filter(
+        Q(trend__in=trends)
+        | Q(signal__in=signals)
+        | Q(document__in=documents)
+        | Q(source__workspace=workspace)
+        | Q(extraction_run__industry__workspace=workspace)
+    )
+
+    extraction_run_ids = set(ExtractionRun.objects.filter(industry__workspace=workspace).values_list("id", flat=True))
+    extraction_run_ids.update(documents.exclude(extraction_run__isnull=True).values_list("extraction_run_id", flat=True))
+    extraction_run_ids.update(signals.exclude(extraction_run__isnull=True).values_list("extraction_run_id", flat=True))
+    extraction_run_ids.update(trends.exclude(extraction_run__isnull=True).values_list("extraction_run_id", flat=True))
+    extraction_run_ids.update(evidence_links.exclude(extraction_run__isnull=True).values_list("extraction_run_id", flat=True))
+    extraction_runs = ExtractionRun.objects.filter(id__in=extraction_run_ids)
+
+    snapshots = TrendScoreSnapshot.objects.filter(trend__in=trends)
+    score_changes = TrendScoreChange.objects.filter(
+        Q(trend__in=trends) | Q(previous_snapshot__in=snapshots) | Q(current_snapshot__in=snapshots)
+    )
+    predictions = Prediction.objects.filter(trend__in=trends)
+    monitoring_summaries = WhatChangedSummary.objects.none()
+
+    return {
+        "prediction_outcomes": PredictionOutcome.objects.filter(prediction__in=predictions),
+        "prediction_updates": PredictionUpdate.objects.filter(prediction__in=predictions),
+        "predictions": predictions,
+        "agent_debates": AgentDebate.objects.filter(trend__in=trends),
+        "alerts": Alert.objects.filter(trend__in=trends),
+        "assumptions": Assumption.objects.filter(trend__in=trends),
+        "strategic_implications": StrategicImplication.objects.filter(trend__in=trends),
+        "trend_score_changes": score_changes,
+        "trend_score_snapshots": snapshots,
+        "what_changed_summaries": monitoring_summaries,
+        "evidence_links": evidence_links,
+        "signals": signals,
+        "documents": documents,
+        "trends": trends,
+        "extraction_runs": extraction_runs,
+    }
+
+
 @api_view(["POST"])
-def clear_analysis_data(_request):
-    counts = {label: model.objects.count() for label, model in ANALYSIS_CLEAR_TARGETS}
+def clear_analysis_data(request):
+    workspace = request_workspace(request)
+    role = workspace_role_for_user(workspace, request_user_id(request))
+    if role not in {"owner", "admin"}:
+        return Response(
+            {"detail": "Only workspace owners or admins can clear generated analysis data."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    workspace_header = request_workspace_id(request)
+    querysets = analysis_clear_querysets(workspace if workspace_header else None)
+    counts = {label: querysets[label].count() for label, _model in ANALYSIS_CLEAR_TARGETS}
     with transaction.atomic():
-        for _label, model in ANALYSIS_CLEAR_TARGETS:
-            model.objects.all().delete()
+        for label, _model in ANALYSIS_CLEAR_TARGETS:
+            querysets[label].delete()
+        log_audit_event(
+            request,
+            "analysis_data.cleared",
+            "workspace",
+            workspace.id,
+            workspace=workspace,
+            details={
+                "deletedCounts": counts,
+                "scope": "workspace" if workspace_header else "global",
+            },
+        )
 
     return Response({
         "status": "cleared",
         "deleted_counts": counts,
-        "message": "Generated documents, signals, trends, evidence, runs, and insight-like analysis data were cleared. Industries and sources were preserved.",
+        "message": "Generated documents, signals, trends, evidence, runs, and insight-like analysis data were cleared for the active workspace. Industries and sources were preserved.",
     })
 
 
@@ -510,7 +590,8 @@ COMMERCE_CONTEXT_TERMS = [
     "foodstuffs", "four square", "new world", "woolworths", "countdown",
     "retail", "retailer", "shopping", "shopper", "commerce", "e-commerce",
     "product", "pricing", "price", "loyalty", "basket", "checkout", "store",
-    "consumer nz", "consumer reports",
+    "consumer nz", "consumer reports", "cpg", "consumer goods", "consumer products",
+    "consumer packaged goods", "brand", "category", "merchandising", "roi",
 ]
 ARTICLE_START_PATTERNS = [
     r"\bA recent study\b",
@@ -703,6 +784,47 @@ def is_industry_relevant(text, industry=None, threshold=3):
     return relevance_score(text, industry) >= threshold
 
 
+BROWSER_FETCH_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+}
+
+
+def strip_tracking_query(url):
+    parsed = urlparse(url or "")
+    if not parsed.query:
+        return url
+    kept = []
+    for part in parsed.query.split("&"):
+        key = part.split("=", 1)[0].lower()
+        if (
+            key.startswith("utm_")
+            or key.startswith("_ga")
+            or key.startswith("_gl")
+            or key in {"gclid", "fbclid", "mc_cid", "mc_eid", "usertoken", "dmid"}
+        ):
+            continue
+        kept.append(part)
+    return urlunparse(parsed._replace(query="&".join(kept)))
+
+
+def capture_error_detail(exc):
+    if isinstance(exc, HTTPError) and exc.code == 403:
+        return (
+            "The source blocked automated capture (HTTP 403). Open the source and paste the article text, "
+            "or upload a saved copy/PDF, then assess it."
+        )
+    if isinstance(exc, HTTPError) and exc.code == 429:
+        return "The source rate-limited automated capture (HTTP 429). Try again later or paste/upload the evidence."
+    return f"Could not extract readable content from the reference URL: {exc}"
+
+
 def fetch_url_bytes(url):
     cache_key = (url or "").rstrip("/")
     if cache_key in FETCH_BYTES_CACHE:
@@ -713,12 +835,35 @@ def fetch_url_bytes(url):
         FETCH_BYTES_CACHE[cache_key] = (content, "text/html")
         return content, "text/html"
         
-    request = Request(url, headers={"User-Agent": "TrendMap/1.0 (+local research workflow)"})
-    with urlopen(request, timeout=12) as response:
-        raw = response.read(250000)
-        content_type = response.headers.get("Content-Type", "")
-    FETCH_BYTES_CACHE[cache_key] = (raw, content_type)
-    return raw, content_type
+    candidates = []
+    for candidate in [url, strip_tracking_query(url)]:
+        normalized = (candidate or "").strip()
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+
+    last_error = None
+    for candidate in candidates:
+        request = Request(candidate, headers=BROWSER_FETCH_HEADERS)
+        try:
+            with urlopen(request, timeout=12) as response:
+                raw = response.read(250000)
+                content_type = response.headers.get("Content-Type", "")
+            FETCH_BYTES_CACHE[cache_key] = (raw, content_type)
+            FETCH_BYTES_CACHE[candidate.rstrip("/")] = (raw, content_type)
+            return raw, content_type
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code in {403, 404, 429} and candidate != candidates[-1]:
+                continue
+            raise
+        except (URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+            if candidate != candidates[-1]:
+                continue
+            raise
+    if last_error:
+        raise last_error
+    raise ValueError("Reference URL is empty.")
 
 
 def fetch_url_text(url):
@@ -1420,51 +1565,550 @@ def strategic_trend_fields(key, name):
         "recommended_actions": ["Validate the trend with internal data", "Define a small experiment and success metric", "Review source evidence before approving strategic options"],
     })
 
-class IndustryViewSet(viewsets.ModelViewSet):
+TOPIC_SYNONYMS = {
+    "affordable": "value",
+    "affordability": "value",
+    "deal": "value",
+    "deals": "value",
+    "discount": "value",
+    "discounts": "value",
+    "price": "value",
+    "pricing": "value",
+    "promotion": "value",
+    "promotions": "value",
+    "shopper": "customer",
+    "shoppers": "customer",
+    "behaviour": "customer",
+    "behavior": "customer",
+}
+
+
+def topic_tokens(value):
+    tokens = []
+    for token in re.split(r"[^a-z0-9]+", (value or "").lower()):
+        if len(token) <= 2 or token in {"and", "the", "for", "with", "into"}:
+            continue
+        tokens.append(TOPIC_SYNONYMS.get(token, token))
+    return set(tokens)
+
+
+def trend_theme_text(theme_or_payload):
+    if isinstance(theme_or_payload, TrendTheme):
+        name = theme_or_payload.name
+        description = theme_or_payload.description
+        keywords = theme_or_payload.keywords or []
+        aliases = theme_or_payload.aliases or []
+    else:
+        name = theme_or_payload.get("name", "")
+        description = theme_or_payload.get("description", "")
+        keywords = theme_or_payload.get("keywords", []) or []
+        aliases = theme_or_payload.get("aliases", []) or []
+    return " ".join([str(name or ""), str(description or ""), " ".join(map(str, keywords)), " ".join(map(str, aliases))])
+
+
+def trend_theme_similarity(left, right):
+    left_tokens = topic_tokens(trend_theme_text(left))
+    right_tokens = topic_tokens(trend_theme_text(right))
+    if not left_tokens or not right_tokens:
+        return 0
+    return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+
+
+def similar_approved_theme(workspace, industry, payload):
+    queryset = TrendTheme.objects.filter(status="approved").filter(Q(workspace__isnull=True) | Q(workspace=workspace))
+    if industry:
+        queryset = queryset.filter(Q(industry__isnull=True) | Q(industry=industry))
+    best = None
+    for theme in queryset:
+        if theme.name.lower() == (payload.get("name") or "").lower():
+            continue
+        score = trend_theme_similarity(theme, payload)
+        if score >= 0.2 and (best is None or score > best[1]):
+            best = (theme, score)
+    return best
+
+
+def create_theme_merge_finding(workspace, canonical, payload, similarity_score):
+    candidate_name = payload.get("name", "Untitled theme")
+    existing = Finding.objects.filter(
+        workspace=workspace,
+        finding_type="merge_proposal",
+        status="new",
+        metadata_json__canonicalThemeId=canonical.id,
+        metadata_json__candidateThemeName=candidate_name,
+    ).first()
+    if existing:
+        return existing
+    return Finding.objects.create(
+        id=str(uuid.uuid4()),
+        workspace=workspace,
+        finding_type="merge_proposal",
+        title=f"Merge {candidate_name} into {canonical.name}",
+        summary=f'"{candidate_name}" appears to overlap with the approved topic "{canonical.name}".',
+        why_it_matters="Merging keeps the topic timeline, evidence score, and downstream strategy work from fragmenting.",
+        evidence_snippet=f"Shared strategic language across candidate and canonical topic. Similarity score: {round(similarity_score * 100)}%.",
+        recommended_action=f'Merge into "{canonical.name}" and preserve "{candidate_name}" as an alias.',
+        status="new",
+        confidence_score=min(0.95, max(0.65, similarity_score + 0.45)),
+        impact_score=0.7,
+        discovered_at=database_datetime(),
+        metadata_json={
+            "canonicalThemeId": canonical.id,
+            "canonicalThemeName": canonical.name,
+            "candidateThemeName": candidate_name,
+            "candidateDescription": payload.get("description", ""),
+            "candidateKeywords": payload.get("keywords", []) or [],
+            "similarityScore": similarity_score,
+        },
+    )
+
+
+def apply_theme_merge_finding(finding):
+    metadata = finding.metadata_json or {}
+    canonical_id = metadata.get("canonicalThemeId")
+    candidate_name = metadata.get("candidateThemeName")
+    if finding.finding_type != "merge_proposal" or not canonical_id or not candidate_name:
+        return finding
+    theme = TrendTheme.objects.filter(id=canonical_id).first()
+    if not theme:
+        return finding
+    aliases = list(theme.aliases or [])
+    if candidate_name not in aliases:
+        aliases.append(candidate_name)
+    keywords = list(theme.keywords or [])
+    for keyword in metadata.get("candidateKeywords", []) or []:
+        if keyword not in keywords:
+            keywords.append(keyword)
+    theme.aliases = aliases
+    theme.keywords = keywords
+    theme.updated_at = database_datetime()
+    theme.save(update_fields=["aliases", "keywords", "updated_at"])
+    finding.status = "merged"
+    finding.reviewed_at = database_datetime()
+    finding.save(update_fields=["status", "reviewed_at"])
+    return finding
+
+DEFAULT_WORKSPACE_ID = "workspace-default"
+DEFAULT_USER_ID = "user-default"
+
+
+def request_user_id(request):
+    return request.headers.get("X-TrendMap-User") or DEFAULT_USER_ID
+
+
+def ensure_workspace_membership(workspace, user_id, role="owner"):
+    now = database_datetime()
+    membership, created = WorkspaceMembership.objects.get_or_create(
+        workspace=workspace,
+        user_id=user_id,
+        defaults={
+            "role": role,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    if not created and not membership.updated_at:
+        membership.updated_at = now
+        membership.save(update_fields=["updated_at"])
+    return membership
+
+
+def workspace_has_memberships(workspace_id):
+    return WorkspaceMembership.objects.filter(workspace_id=workspace_id).exists()
+
+
+def user_can_access_workspace(user_id, workspace_id):
+    if not workspace_id:
+        return True
+    if not workspace_has_memberships(workspace_id):
+        return True
+    return WorkspaceMembership.objects.filter(workspace_id=workspace_id, user_id=user_id).exists()
+
+
+def workspace_role_for_user(workspace, user_id):
+    membership = WorkspaceMembership.objects.filter(workspace=workspace, user_id=user_id).first()
+    if membership:
+        return membership.role
+    if not WorkspaceMembership.objects.filter(workspace=workspace).exists():
+        return "owner"
+    return None
+
+
+SOURCE_APPROVAL_ROLES = {"owner", "admin", "source_curator"}
+FINDING_APPROVAL_ROLES = {"owner", "admin", "strategist", "strategy_approver"}
+TREND_APPROVAL_ROLES = {"owner", "admin", "strategist", "strategy_approver"}
+WORKSPACE_ADMIN_ROLES = {"owner", "admin"}
+WORKSPACE_ROLES = {"owner", "admin", "source_curator", "strategist", "strategy_approver", "analyst", "viewer"}
+
+
+def permission_denied(message):
+    return Response({"detail": message}, status=status.HTTP_403_FORBIDDEN)
+
+
+def request_role_for_object(request, obj):
+    workspace = getattr(obj, "workspace", None) or request_workspace(request)
+    return workspace_role_for_user(workspace, request_user_id(request))
+
+
+def requested_status(request):
+    if hasattr(request, "data") and isinstance(request.data, dict):
+        return request.data.get("status")
+    return None
+
+
+def log_audit_event(request, action, entity_type, entity_id, workspace=None, details=None):
+    payload = dict(details or {})
+    if workspace is not None:
+        payload.setdefault("workspaceId", str(workspace.id))
+    AuditEvent.objects.create(
+        id=str(uuid.uuid4()),
+        user_id=request_user_id(request),
+        action=action,
+        entity_type=entity_type,
+        entity_id=str(entity_id),
+        details=json.dumps(payload),
+        timestamp=database_datetime(),
+    )
+
+
+def default_workspace():
+    workspace, _created = Workspace.objects.get_or_create(
+        id=DEFAULT_WORKSPACE_ID,
+        defaults={
+            "name": "Company-wide Trends",
+            "purpose": "Default trend analysis workspace",
+            "created_at": database_datetime(),
+            "updated_at": database_datetime(),
+        },
+    )
+    return workspace
+
+
+def request_workspace_id(request):
+    header_value = request.headers.get("X-TrendMap-Workspace")
+    if header_value:
+        return header_value
+    query_value = request.query_params.get("workspace_id") or request.query_params.get("workspaceId")
+    if query_value:
+        return query_value
+    if hasattr(request, "data") and isinstance(request.data, dict):
+        return request.data.get("workspace_id") or request.data.get("workspaceId")
+    return None
+
+
+def request_workspace(request):
+    workspace_id = request_workspace_id(request)
+    if not workspace_id:
+        return default_workspace()
+    if not user_can_access_workspace(request_user_id(request), workspace_id):
+        return default_workspace()
+    return Workspace.objects.filter(id=workspace_id).first() or default_workspace()
+
+
+class WorkspaceScopedMixin:
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not any(field.name == "workspace" for field in queryset.model._meta.fields):
+            return queryset
+        workspace_id = request_workspace_id(self.request)
+        if workspace_id:
+            if not user_can_access_workspace(request_user_id(self.request), workspace_id):
+                return queryset.none()
+            return queryset.filter(workspace_id=workspace_id)
+        return queryset.filter(Q(workspace__isnull=True) | Q(workspace_id=DEFAULT_WORKSPACE_ID))
+
+    def perform_create(self, serializer):
+        model = serializer.Meta.model
+        if any(field.name == "workspace" for field in model._meta.fields):
+            serializer.save(workspace=request_workspace(self.request))
+        else:
+            serializer.save()
+
+
+class WorkspaceViewSet(viewsets.ModelViewSet):
+    queryset = Workspace.objects.all().order_by("-updated_at", "-created_at")
+    serializer_class = WorkspaceSerializer
+
+    def get_queryset(self):
+        if not Workspace.objects.exists():
+            default_workspace()
+        user_id = request_user_id(self.request)
+        return Workspace.objects.filter(
+            Q(memberships__user_id=user_id) | Q(memberships__isnull=True)
+        ).distinct().order_by("-updated_at", "-created_at")
+
+    def perform_create(self, serializer):
+        now = database_datetime()
+        workspace = serializer.save(created_at=now, updated_at=now)
+        ensure_workspace_membership(workspace, request_user_id(self.request), "owner")
+
+    def perform_update(self, serializer):
+        serializer.save(updated_at=database_datetime())
+
+    def workspace_admin_denial(self, workspace):
+        role = workspace_role_for_user(workspace, request_user_id(self.request))
+        if role not in WORKSPACE_ADMIN_ROLES:
+            return permission_denied("Only workspace owners or admins can manage workspace members.")
+        return None
+
+    def owner_count(self, workspace):
+        return WorkspaceMembership.objects.filter(workspace=workspace, role="owner").count()
+
+    def validate_member_role(self, role):
+        if role not in WORKSPACE_ROLES:
+            return Response({"detail": f"Unsupported workspace role: {role}"}, status=status.HTTP_400_BAD_REQUEST)
+        return None
+
+    @action(detail=True, methods=["get", "post"], url_path="members")
+    def members(self, request, pk=None):
+        workspace = self.get_object()
+        denial = self.workspace_admin_denial(workspace)
+        if denial:
+            return denial
+
+        if request.method == "GET":
+            members = WorkspaceMembership.objects.filter(workspace=workspace).order_by("user_id")
+            return Response(WorkspaceMembershipSerializer(members, many=True).data)
+
+        user_id = request.data.get("user_id") or request.data.get("userId")
+        role = request.data.get("role")
+        if not user_id or not role:
+            return Response({"detail": "userId and role are required."}, status=status.HTTP_400_BAD_REQUEST)
+        invalid_role = self.validate_member_role(role)
+        if invalid_role:
+            return invalid_role
+
+        now = database_datetime()
+        membership = WorkspaceMembership.objects.filter(workspace=workspace, user_id=user_id).first()
+        previous_role = membership.role if membership else None
+        if membership and previous_role == "owner" and role != "owner" and self.owner_count(workspace) <= 1:
+            return Response({"detail": "A workspace must keep at least one owner."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if membership:
+            membership.role = role
+            membership.updated_at = now
+            membership.save(update_fields=["role", "updated_at"])
+            action = "workspace.member.role_updated"
+        else:
+            membership = WorkspaceMembership.objects.create(
+                id=str(uuid.uuid4()),
+                workspace=workspace,
+                user_id=user_id,
+                role=role,
+                created_at=now,
+                updated_at=now,
+            )
+            action = "workspace.member.added"
+
+        log_audit_event(
+            request,
+            action,
+            "workspace",
+            workspace.id,
+            workspace=workspace,
+            details={"memberUserId": user_id, "previousRole": previous_role, "newRole": role},
+        )
+        return Response(WorkspaceMembershipSerializer(membership).data, status=status.HTTP_201_CREATED if previous_role is None else status.HTTP_200_OK)
+
+    @action(detail=True, methods=["patch", "delete"], url_path=r"members/(?P<member_user_id>[^/]+)")
+    def member_detail(self, request, pk=None, member_user_id=None):
+        workspace = self.get_object()
+        denial = self.workspace_admin_denial(workspace)
+        if denial:
+            return denial
+
+        membership = WorkspaceMembership.objects.filter(workspace=workspace, user_id=member_user_id).first()
+        if not membership:
+            return Response({"detail": "Workspace member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "DELETE":
+            if membership.role == "owner" and self.owner_count(workspace) <= 1:
+                return Response({"detail": "A workspace must keep at least one owner."}, status=status.HTTP_400_BAD_REQUEST)
+            previous_role = membership.role
+            membership.delete()
+            log_audit_event(
+                request,
+                "workspace.member.removed",
+                "workspace",
+                workspace.id,
+                workspace=workspace,
+                details={"memberUserId": member_user_id, "previousRole": previous_role},
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        role = request.data.get("role")
+        if not role:
+            return Response({"detail": "role is required."}, status=status.HTTP_400_BAD_REQUEST)
+        invalid_role = self.validate_member_role(role)
+        if invalid_role:
+            return invalid_role
+        if membership.role == "owner" and role != "owner" and self.owner_count(workspace) <= 1:
+            return Response({"detail": "A workspace must keep at least one owner."}, status=status.HTTP_400_BAD_REQUEST)
+
+        previous_role = membership.role
+        membership.role = role
+        membership.updated_at = database_datetime()
+        membership.save(update_fields=["role", "updated_at"])
+        log_audit_event(
+            request,
+            "workspace.member.role_updated",
+            "workspace",
+            workspace.id,
+            workspace=workspace,
+            details={"memberUserId": member_user_id, "previousRole": previous_role, "newRole": role},
+        )
+        return Response(WorkspaceMembershipSerializer(membership).data)
+
+
+class FindingViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
+    queryset = Finding.objects.all().order_by("-discovered_at", "-retrieved_at")
+    serializer_class = FindingSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(workspace=request_workspace(self.request), discovered_at=database_datetime())
+
+    def update(self, request, *args, **kwargs):
+        status_value = requested_status(request)
+        finding = self.get_object() if status_value else None
+        previous_status = finding.status if finding else None
+        if status_value in {"approved", "merged", "escalated"}:
+            role = request_role_for_object(request, finding)
+            if role not in FINDING_APPROVAL_ROLES:
+                return permission_denied("Only workspace strategists, strategy approvers, admins, or owners can approve findings.")
+        response = super().update(request, *args, **kwargs)
+        if status_value and response.status_code < 400 and finding:
+            finding.refresh_from_db()
+            if previous_status != finding.status:
+                log_audit_event(
+                    request,
+                    f"finding.status.{finding.status}",
+                    "finding",
+                    finding.id,
+                    workspace=finding.workspace,
+                    details={"previousStatus": previous_status, "newStatus": finding.status},
+                )
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        finding = serializer.save(reviewed_at=database_datetime())
+        if finding.status == "approved" and finding.finding_type == "merge_proposal":
+            apply_theme_merge_finding(finding)
+
+
+class IndustryViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = Industry.objects.all().order_by('-updated_at', '-created_at')
     serializer_class = IndustrySerializer
 
     def perform_create(self, serializer):
         now = database_datetime()
-        serializer.save(created_at=now, updated_at=now)
+        serializer.save(workspace=request_workspace(self.request), created_at=now, updated_at=now)
 
     def perform_update(self, serializer):
         serializer.save(updated_at=database_datetime())
 
 
-class TrendThemeViewSet(viewsets.ModelViewSet):
+class TrendThemeViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = TrendTheme.objects.all().order_by('-updated_at', '-created_at')
     serializer_class = TrendThemeSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_at=database_datetime(), updated_at=database_datetime())
+        serializer.save(workspace=request_workspace(self.request), created_at=database_datetime(), updated_at=database_datetime())
 
     def perform_update(self, serializer):
         serializer.save(updated_at=database_datetime())
 
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        if 'industryId' in data and 'industry_id' not in data and 'industry' not in data:
+            data['industry_id'] = data.pop('industryId')
+        industry_id = data.get("industry_id") or data.get("industry")
+        workspace = request_workspace(request)
+        industry = Industry.objects.filter(id=industry_id).filter(Q(workspace__isnull=True) | Q(workspace=workspace)).first() if industry_id else None
+        payload = {
+            "name": data.get("name", "Untitled theme"),
+            "description": data.get("description", ""),
+            "keywords": data.get("keywords", []) or [],
+            "aliases": data.get("aliases", []) or [],
+            "status": data.get("status") or "suggested",
+            "origin": data.get("origin") or "manual",
+            "evidence_summary": data.get("evidence_summary") or data.get("evidenceSummary") or "",
+        }
+        match = similar_approved_theme(workspace, industry, payload)
+        if match:
+            canonical, score = match
+            create_theme_merge_finding(workspace, canonical, payload, score)
+            return Response(self.get_serializer(canonical).data, status=status.HTTP_201_CREATED)
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     @action(detail=False, methods=['post'], url_path='derive')
     def derive(self, request):
         industry_id = request.data.get("industry_id") or request.data.get("industryId")
-        industry = Industry.objects.filter(id=industry_id).first() if industry_id else latest_industry()
+        workspace = request_workspace(request)
+        industry = Industry.objects.filter(id=industry_id).filter(Q(workspace__isnull=True) | Q(workspace=workspace)).first() if industry_id else latest_industry()
         if not industry:
             return Response({"detail": "Industry profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
         created_or_updated = []
         for payload in default_theme_payloads(industry):
             theme, _created = ensure_theme(industry, payload)
+            if not theme.workspace_id:
+                theme.workspace = workspace
+                theme.save(update_fields=["workspace"])
             created_or_updated.append(theme)
         return Response(TrendThemeSerializer(created_or_updated, many=True).data, status=status.HTTP_201_CREATED)
 
 
-class SourceViewSet(viewsets.ModelViewSet):
+class SourceViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = Source.objects.all().order_by('-created_at')
     serializer_class = SourceSerializer
 
-class NewsScanRunViewSet(viewsets.ModelViewSet):
+    def update(self, request, *args, **kwargs):
+        status_value = requested_status(request)
+        source = self.get_object() if status_value else None
+        previous_status = source.status if source else None
+        if status_value in {"approved", "rejected"}:
+            role = request_role_for_object(request, source)
+            if role not in SOURCE_APPROVAL_ROLES:
+                return permission_denied("Only workspace source curators, admins, or owners can approve or reject sources.")
+        response = super().update(request, *args, **kwargs)
+        if status_value and response.status_code < 400 and source:
+            source.refresh_from_db()
+            if previous_status != source.status:
+                log_audit_event(
+                    request,
+                    f"source.status.{source.status}",
+                    "source",
+                    source.id,
+                    workspace=source.workspace,
+                    details={"previousStatus": previous_status, "newStatus": source.status},
+                )
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+class NewsScanRunViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = NewsScanRun.objects.all().order_by('-started_at')
     serializer_class = NewsScanRunSerializer
 
-class NewsSnippetViewSet(viewsets.ModelViewSet):
+class NewsSnippetViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = NewsSnippet.objects.all().order_by('-created_at')
     serializer_class = NewsSnippetSerializer
 
@@ -1483,7 +2127,7 @@ def scan_news(request):
         "sources_created": int(run.created_source_count or 0),
     }, status=status.HTTP_201_CREATED)
 
-class DocumentViewSet(viewsets.ModelViewSet):
+class DocumentViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = Document.objects.all().order_by('-created_at')
     serializer_class = DocumentSerializer
 
@@ -1513,7 +2157,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             try:
                 title, extracted_content, _content_type = fetch_source_excerpt(url)
             except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
-                return Response({"detail": f"Could not extract readable content from the reference URL: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": capture_error_detail(exc)}, status=status.HTTP_400_BAD_REQUEST)
             data['content'] = extracted_content
             if not (data.get('title') or '').strip():
                 data['title'] = title
@@ -1529,10 +2173,50 @@ class DocumentViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    @action(detail=True, methods=['post'], url_path='refresh-content')
+    def refresh_content(self, request, pk=None):
+        document = self.get_object()
+        if not document.url:
+            return Response({"detail": "Document has no reference URL to capture."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            title, extracted_content, _content_type = fetch_source_excerpt(document.url)
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            return Response({"detail": capture_error_detail(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        document.content = extracted_content
+        if not document.title or document.title == document.source.name:
+            document.title = title
+        document.status = "raw"
+        document.save(update_fields=["title", "content", "status"])
+        return Response(self.get_serializer(document).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='replace-content')
+    def replace_content(self, request, pk=None):
+        document = self.get_object()
+        content = (request.data.get("content") or "").strip()
+        if len(content.split()) < 40:
+            return Response(
+                {"detail": "Paste at least a few paragraphs of article text, about 40 words or more, so TrendMap can extract reliable signals."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            signal_ids = list(Signal.objects.filter(document=document).values_list("id", flat=True))
+            EvidenceLink.objects.filter(document=document).delete()
+            if signal_ids:
+                EvidenceLink.objects.filter(signal_id__in=signal_ids).delete()
+            Signal.objects.filter(document=document).delete()
+            document.content = content[:8000]
+            document.status = "raw"
+            document.save(update_fields=["content", "status"])
+
+        return Response(self.get_serializer(document).data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'], url_path='extract-from-sources')
     def extract_from_sources(self, request):
         FETCH_CACHE.clear()
         FETCH_BYTES_CACHE.clear()
+        workspace = request_workspace(request)
         industry = latest_industry()
         run = ExtractionRun.objects.create(
             id=str(uuid.uuid4()),
@@ -1541,7 +2225,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             status="running",
             started_at=timezone.now(),
         )
-        approved_sources = Source.objects.filter(status='approved')
+        approved_sources = Source.objects.filter(status='approved').filter(Q(workspace__isnull=True) | Q(workspace=workspace))
         created_ids = []
         errors = []
         seen_urls = set()
@@ -1621,21 +2305,50 @@ class DocumentViewSet(viewsets.ModelViewSet):
             "errors": errors
         }, status=status.HTTP_201_CREATED)
 
-class SignalViewSet(viewsets.ModelViewSet):
+class SignalViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = Signal.objects.all().order_by('-created_at')
     serializer_class = SignalSerializer
 
-class TrendViewSet(viewsets.ModelViewSet):
+class TrendViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = Trend.objects.all().order_by('-created_at')
     serializer_class = TrendSerializer
 
+    def update(self, request, *args, **kwargs):
+        status_value = requested_status(request)
+        trend = self.get_object() if status_value else None
+        previous_status = trend.status if trend else None
+        if status_value in {"approved", "rejected"}:
+            role = request_role_for_object(request, trend)
+            if role not in TREND_APPROVAL_ROLES:
+                return permission_denied("Only workspace strategists, strategy approvers, admins, or owners can approve or reject trends.")
+        response = super().update(request, *args, **kwargs)
+        if status_value and response.status_code < 400 and trend:
+            trend.refresh_from_db()
+            if previous_status != trend.status:
+                log_audit_event(
+                    request,
+                    f"trend.status.{trend.status}",
+                    "trend",
+                    trend.id,
+                    workspace=trend.workspace,
+                    details={"previousStatus": previous_status, "newStatus": trend.status},
+                )
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
     @action(detail=True, methods=['get', 'post'])
     def evidence(self, request, pk=None):
-        trend = self.get_object()
         if request.method == 'GET':
+            trend = self.get_queryset().filter(pk=pk).first()
+            if not trend:
+                return Response([])
             qs = EvidenceLink.objects.filter(trend=trend)
             return Response(EvidenceLinkSerializer(qs, many=True).data)
 
+        trend = self.get_object()
         data = request.data.copy()
         data['trend'] = trend.id
         data['signal'] = data.get('signal_id')
@@ -1701,8 +2414,29 @@ class AssumptionViewSet(viewsets.ModelViewSet):
     serializer_class = AssumptionSerializer
 
 class AuditEventViewSet(viewsets.ModelViewSet):
-    queryset = AuditEvent.objects.all()
+    queryset = AuditEvent.objects.all().order_by("-timestamp")
     serializer_class = AuditEventSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        entity_type = self.request.query_params.get("entity_type") or self.request.query_params.get("entityType")
+        entity_id = self.request.query_params.get("entity_id") or self.request.query_params.get("entityId")
+        user_id = self.request.query_params.get("user_id") or self.request.query_params.get("userId")
+        workspace_id = self.request.query_params.get("workspace_id") or self.request.query_params.get("workspaceId")
+        if entity_type:
+            queryset = queryset.filter(entity_type=entity_type)
+        if entity_id:
+            queryset = queryset.filter(entity_id=entity_id)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        if workspace_id:
+            queryset = queryset.filter(
+                Q(details__contains=f'"workspaceId": "{workspace_id}"')
+                | Q(details__contains=f'"workspaceId":"{workspace_id}"')
+                | Q(details__contains=f'"workspace_id": "{workspace_id}"')
+                | Q(details__contains=f'"workspace_id":"{workspace_id}"')
+            )
+        return queryset
 
 class ChangeEventViewSet(viewsets.ModelViewSet):
     queryset = ChangeEvent.objects.all()
@@ -1840,7 +2574,7 @@ class PredictionViewSet(viewsets.ModelViewSet):
     queryset = Prediction.objects.all()
     serializer_class = PredictionSerializer
 
-class RoadmapItemViewSet(viewsets.ModelViewSet):
+class RoadmapItemViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = RoadmapItem.objects.all()
     serializer_class = RoadmapItemSerializer
 
@@ -1902,7 +2636,7 @@ class StrategicImplicationViewSet(viewsets.ModelViewSet):
     queryset = StrategicImplication.objects.all()
     serializer_class = StrategicImplicationSerializer
 
-class StrategicOptionViewSet(viewsets.ModelViewSet):
+class StrategicOptionViewSet(WorkspaceScopedMixin, viewsets.ModelViewSet):
     queryset = StrategicOption.objects.all()
     serializer_class = StrategicOptionSerializer
 

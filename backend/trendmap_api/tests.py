@@ -3,8 +3,11 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
-from .models import Industry, Source, Document, Signal, Trend, TrendTheme, EvidenceLink, ExtractionRun, HealthCheck, NewsSnippet, NewsScanRun
+from .models import Industry, Source, Document, Signal, Trend, TrendTheme, EvidenceLink, ExtractionRun, HealthCheck, NewsSnippet, NewsScanRun, Workspace, Finding, StrategicOption, RoadmapItem, WorkspaceMembership, AuditEvent
+from . import views
 from unittest.mock import patch
+from urllib.error import HTTPError
+import json
 
 class CoreEntitiesTests(APITestCase):
 
@@ -67,6 +70,620 @@ class CoreEntitiesTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Source.objects.count(), 1)
 
+    def test_source_lists_are_scoped_by_workspace_header(self):
+        company = Workspace.objects.create(id='ws-company', name='Company-wide Trends', purpose='Broad monitoring')
+        search = Workspace.objects.create(id='ws-search', name='Search', purpose='Search monitoring')
+        Source.objects.create(name='Company Source', url='https://example.com/company', status='approved', workspace=company)
+        Source.objects.create(name='Search Source', url='https://example.com/search', status='approved', workspace=search)
+
+        response = self.client.get('/api/sources', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['name'] for item in response.json()], ['Search Source'])
+
+    def test_workspace_create_endpoint_creates_standalone_workspace(self):
+        response = self.client.post('/api/workspaces', {
+            'id': 'ws-new',
+            'name': 'Search',
+            'purpose': 'Focused search trend pipeline',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = Workspace.objects.get(id=response.json()['id'])
+        self.assertEqual(created.name, 'Search')
+        self.assertIsNotNone(created.created_at)
+        self.assertIsNotNone(created.updated_at)
+
+    def test_workspace_create_endpoint_assigns_creator_owner_role(self):
+        response = self.client.post('/api/workspaces', {
+            'id': 'ws-owned',
+            'name': 'Retail Media',
+            'purpose': 'Retail media trend pipeline',
+        }, format='json', HTTP_X_TRENDMAP_USER='user-analyst')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()['currentUserRole'], 'owner')
+        membership = WorkspaceMembership.objects.get(workspace_id=response.json()['id'], user_id='user-analyst')
+        self.assertEqual(membership.role, 'owner')
+
+    def test_workspace_list_is_scoped_to_current_user_memberships(self):
+        company = Workspace.objects.create(id='ws-company', name='Company-wide Trends')
+        search = Workspace.objects.create(id='ws-search', name='Search')
+        marketing = Workspace.objects.create(id='ws-marketing', name='Digital Marketing')
+        WorkspaceMembership.objects.create(id='mem-company', workspace=company, user_id='user-analyst', role='strategist')
+        WorkspaceMembership.objects.create(id='mem-search', workspace=search, user_id='user-analyst', role='analyst')
+        WorkspaceMembership.objects.create(id='mem-marketing', workspace=marketing, user_id='other-user', role='owner')
+
+        response = self.client.get('/api/workspaces', HTTP_X_TRENDMAP_USER='user-analyst')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual({item['id'] for item in response.json()}, {'ws-company', 'ws-search'})
+        roles = {item['id']: item['currentUserRole'] for item in response.json()}
+        self.assertEqual(roles['ws-company'], 'strategist')
+        self.assertEqual(roles['ws-search'], 'analyst')
+
+    def test_workspace_owner_can_manage_members(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-owner', workspace=workspace, user_id='user-owner', role='owner')
+
+        add_response = self.client.post(
+            '/api/workspaces/ws-search/members',
+            {'userId': 'user-analyst', 'role': 'analyst'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-owner',
+        )
+
+        self.assertEqual(add_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(add_response.json()['userId'], 'user-analyst')
+        self.assertEqual(add_response.json()['role'], 'analyst')
+
+        update_response = self.client.patch(
+            '/api/workspaces/ws-search/members/user-analyst',
+            {'role': 'strategist'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-owner',
+        )
+
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.json()['role'], 'strategist')
+
+        list_response = self.client.get('/api/workspaces/ws-search/members', HTTP_X_TRENDMAP_USER='user-owner')
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual({member['userId'] for member in list_response.json()}, {'user-owner', 'user-analyst'})
+
+        delete_response = self.client.delete('/api/workspaces/ws-search/members/user-analyst', HTTP_X_TRENDMAP_USER='user-owner')
+
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(WorkspaceMembership.objects.filter(workspace=workspace, user_id='user-analyst').exists())
+        self.assertTrue(AuditEvent.objects.filter(entity_type='workspace', action='workspace.member.added').exists())
+        self.assertTrue(AuditEvent.objects.filter(entity_type='workspace', action='workspace.member.role_updated').exists())
+        self.assertTrue(AuditEvent.objects.filter(entity_type='workspace', action='workspace.member.removed').exists())
+
+    def test_non_admin_cannot_manage_workspace_members(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-owner', workspace=workspace, user_id='user-owner', role='owner')
+        WorkspaceMembership.objects.create(id='mem-analyst', workspace=workspace, user_id='user-analyst', role='analyst')
+
+        response = self.client.post(
+            '/api/workspaces/ws-search/members',
+            {'userId': 'user-viewer', 'role': 'viewer'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-analyst',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(WorkspaceMembership.objects.filter(workspace=workspace, user_id='user-viewer').exists())
+
+    def test_workspace_must_keep_at_least_one_owner(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-owner', workspace=workspace, user_id='user-owner', role='owner')
+
+        demote_response = self.client.patch(
+            '/api/workspaces/ws-search/members/user-owner',
+            {'role': 'admin'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-owner',
+        )
+
+        self.assertEqual(demote_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(WorkspaceMembership.objects.get(workspace=workspace, user_id='user-owner').role, 'owner')
+
+        delete_response = self.client.delete('/api/workspaces/ws-search/members/user-owner', HTTP_X_TRENDMAP_USER='user-owner')
+
+        self.assertEqual(delete_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(WorkspaceMembership.objects.filter(workspace=workspace, user_id='user-owner').exists())
+
+    def test_clear_analysis_data_requires_owner_or_admin_role(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-analyst', workspace=workspace, user_id='user-analyst', role='analyst')
+        Trend.objects.create(id='trend-clear-blocked', workspace=workspace, name='Trend to preserve', status='candidate')
+
+        response = self.client.post(
+            '/api/admin/clear-analysis-data',
+            {},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-analyst',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Trend.objects.filter(id='trend-clear-blocked').count(), 1)
+
+    def test_owner_can_clear_analysis_data(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-owner', workspace=workspace, user_id='user-owner', role='owner')
+        Trend.objects.create(id='trend-clear-allowed', workspace=workspace, name='Trend to clear', status='candidate')
+
+        response = self.client.post(
+            '/api/admin/clear-analysis-data',
+            {},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-owner',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Trend.objects.filter(id='trend-clear-allowed').count(), 0)
+        event = AuditEvent.objects.get(entity_type='workspace', entity_id='ws-search')
+        self.assertEqual(event.user_id, 'user-owner')
+        self.assertEqual(event.action, 'analysis_data.cleared')
+        details = json.loads(event.details)
+        self.assertEqual(details['workspaceId'], 'ws-search')
+        self.assertEqual(details['deletedCounts']['trends'], 1)
+
+    def test_analyst_cannot_approve_source(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-analyst-source', workspace=workspace, user_id='user-analyst', role='analyst')
+        Source.objects.create(id='src-review', workspace=workspace, name='Review Source', url='https://example.com/review', status='suggested')
+
+        response = self.client.patch(
+            '/api/sources/src-review',
+            {'status': 'approved'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-analyst',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Source.objects.get(id='src-review').status, 'suggested')
+
+    def test_source_curator_can_approve_source(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-curator-source', workspace=workspace, user_id='user-curator', role='source_curator')
+        Source.objects.create(id='src-curator-review', workspace=workspace, name='Review Source', url='https://example.com/curator', status='suggested')
+
+        response = self.client.patch(
+            '/api/sources/src-curator-review',
+            {'status': 'approved'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-curator',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Source.objects.get(id='src-curator-review').status, 'approved')
+        event = AuditEvent.objects.get(entity_type='source', entity_id='src-curator-review')
+        self.assertEqual(event.user_id, 'user-curator')
+        self.assertEqual(event.action, 'source.status.approved')
+        details = json.loads(event.details)
+        self.assertEqual(details['workspaceId'], 'ws-search')
+        self.assertEqual(details['previousStatus'], 'suggested')
+        self.assertEqual(details['newStatus'], 'approved')
+
+    def test_analyst_cannot_approve_finding(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-analyst-finding', workspace=workspace, user_id='user-analyst', role='analyst')
+        Finding.objects.create(id='finding-review', workspace=workspace, finding_type='trend_candidate', title='Finding', summary='Review me', status='new')
+
+        response = self.client.patch(
+            '/api/findings/finding-review',
+            {'status': 'approved'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-analyst',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Finding.objects.get(id='finding-review').status, 'new')
+
+    def test_strategist_can_approve_finding(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-strategist-finding', workspace=workspace, user_id='user-strategist', role='strategist')
+        Finding.objects.create(id='finding-strategy-review', workspace=workspace, finding_type='trend_candidate', title='Finding', summary='Review me', status='new')
+
+        response = self.client.patch(
+            '/api/findings/finding-strategy-review',
+            {'status': 'approved'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-strategist',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Finding.objects.get(id='finding-strategy-review').status, 'approved')
+        event = AuditEvent.objects.get(entity_type='finding', entity_id='finding-strategy-review')
+        self.assertEqual(event.user_id, 'user-strategist')
+        self.assertEqual(event.action, 'finding.status.approved')
+        details = json.loads(event.details)
+        self.assertEqual(details['workspaceId'], 'ws-search')
+        self.assertEqual(details['previousStatus'], 'new')
+        self.assertEqual(details['newStatus'], 'approved')
+
+    def test_analyst_cannot_approve_trend(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-analyst-trend', workspace=workspace, user_id='user-analyst', role='analyst')
+        Trend.objects.create(id='trend-review', workspace=workspace, name='Review Trend', status='candidate')
+
+        response = self.client.patch(
+            '/api/trends/trend-review',
+            {'status': 'approved'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-analyst',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Trend.objects.get(id='trend-review').status, 'candidate')
+
+    def test_strategist_can_approve_trend(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        WorkspaceMembership.objects.create(id='mem-strategist-trend', workspace=workspace, user_id='user-strategist', role='strategist')
+        Trend.objects.create(id='trend-strategy-review', workspace=workspace, name='Review Trend', status='candidate')
+
+        response = self.client.patch(
+            '/api/trends/trend-strategy-review',
+            {'status': 'approved'},
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-strategist',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Trend.objects.get(id='trend-strategy-review').status, 'approved')
+        event = AuditEvent.objects.get(entity_type='trend', entity_id='trend-strategy-review')
+        self.assertEqual(event.user_id, 'user-strategist')
+        self.assertEqual(event.action, 'trend.status.approved')
+        details = json.loads(event.details)
+        self.assertEqual(details['workspaceId'], 'ws-search')
+        self.assertEqual(details['previousStatus'], 'candidate')
+        self.assertEqual(details['newStatus'], 'approved')
+
+    def test_trend_history_reads_audit_events_for_trend(self):
+        AuditEvent.objects.create(
+            id='audit-trend-1',
+            user_id='user-strategist',
+            action='trend.status.approved',
+            entity_type='trend',
+            entity_id='trend-history',
+            details=json.dumps({'workspaceId': 'ws-search'}),
+            timestamp=timezone.now(),
+        )
+        AuditEvent.objects.create(
+            id='audit-source-1',
+            user_id='user-curator',
+            action='source.status.approved',
+            entity_type='source',
+            entity_id='src-history',
+            details=json.dumps({'workspaceId': 'ws-search'}),
+            timestamp=timezone.now(),
+        )
+
+        response = self.client.get('/api/audit-events?entity_type=trend&entity_id=trend-history')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]['entity_id'], 'trend-history')
+
+    def test_audit_events_can_be_filtered_by_workspace(self):
+        AuditEvent.objects.create(
+            id='audit-search-workspace',
+            user_id='user-strategist',
+            action='trend.status.approved',
+            entity_type='trend',
+            entity_id='trend-search',
+            details=json.dumps({'workspaceId': 'ws-search'}),
+            timestamp=timezone.now(),
+        )
+        AuditEvent.objects.create(
+            id='audit-company-workspace',
+            user_id='user-strategist',
+            action='trend.status.approved',
+            entity_type='trend',
+            entity_id='trend-company',
+            details=json.dumps({'workspaceId': 'ws-company'}),
+            timestamp=timezone.now(),
+        )
+
+        response = self.client.get('/api/audit-events?workspace_id=ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]['entity_id'], 'trend-search')
+
+    def test_missing_trend_evidence_returns_empty_list_for_review_board(self):
+        response = self.client.get('/api/trends/stale-trend/evidence', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), [])
+
+    def test_findings_are_workspace_scoped_and_reviewable(self):
+        company = Workspace.objects.create(id='ws-company', name='Company-wide Trends')
+        search = Workspace.objects.create(id='ws-search', name='Search')
+        Finding.objects.create(
+            id='finding-company',
+            workspace=company,
+            finding_type='source_candidate',
+            title='Company finding',
+            summary='Company-only finding',
+            status='new',
+        )
+        Finding.objects.create(
+            id='finding-search',
+            workspace=search,
+            finding_type='merge_proposal',
+            title='Search finding',
+            summary='Search-only finding',
+            status='new',
+        )
+
+        response = self.client.get('/api/findings', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['title'] for item in response.json()], ['Search finding'])
+
+        patch_response = self.client.patch('/api/findings/finding-search', {'status': 'approved'}, format='json', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Finding.objects.get(id='finding-search').status, 'approved')
+
+    def test_similar_theme_create_generates_merge_proposal_instead_of_duplicate(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        industry = Industry.objects.create(id='ind-search', workspace=workspace, name='Online Grocery', geography='NZ')
+        canonical = TrendTheme.objects.create(
+            id='theme-value',
+            workspace=workspace,
+            industry=industry,
+            name='Shopper value and affordability',
+            description='Price sensitivity, promotions, and affordability pressure.',
+            keywords=['value', 'affordability', 'pricing', 'promotions'],
+            status='approved',
+            origin='manual',
+        )
+
+        response = self.client.post('/api/themes', {
+            'industry_id': industry.id,
+            'name': 'Value-seeking grocery behaviour',
+            'description': 'Shoppers are looking harder for value and deals.',
+            'keywords': ['value', 'price', 'deals', 'shopper behaviour'],
+            'status': 'approved',
+            'origin': 'manual',
+        }, format='json', HTTP_X_TRENDMAP_WORKSPACE=workspace.id)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TrendTheme.objects.filter(workspace=workspace).count(), 1)
+        finding = Finding.objects.get(workspace=workspace, finding_type='merge_proposal')
+        self.assertIn('Value-seeking grocery behaviour', finding.title)
+        self.assertEqual(finding.metadata_json['canonicalThemeId'], canonical.id)
+
+    def test_approving_merge_proposal_adds_theme_alias_and_marks_merged(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        canonical = TrendTheme.objects.create(
+            id='theme-value',
+            workspace=workspace,
+            name='Shopper value and affordability',
+            keywords=['value', 'affordability', 'pricing'],
+            status='approved',
+            origin='manual',
+        )
+        finding = Finding.objects.create(
+            id='finding-merge',
+            workspace=workspace,
+            finding_type='merge_proposal',
+            title='Merge Value-seeking grocery behaviour into Shopper value and affordability',
+            summary='The candidate overlaps with the approved topic.',
+            status='new',
+            metadata_json={
+                'canonicalThemeId': canonical.id,
+                'candidateThemeName': 'Value-seeking grocery behaviour',
+                'candidateKeywords': ['value', 'price', 'deals'],
+            },
+        )
+
+        response = self.client.patch(f'/api/findings/{finding.id}', {'status': 'approved'}, format='json', HTTP_X_TRENDMAP_WORKSPACE=workspace.id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        canonical.refresh_from_db()
+        finding.refresh_from_db()
+        self.assertIn('Value-seeking grocery behaviour', canonical.aliases)
+        self.assertEqual(finding.status, 'merged')
+
+    def test_strategic_options_are_scoped_by_workspace_header(self):
+        company = Workspace.objects.create(id='ws-company', name='Company-wide Trends')
+        search = Workspace.objects.create(id='ws-search', name='Search')
+        StrategicOption.objects.create(
+            id='option-company',
+            workspace=company,
+            title='Company option',
+            option_type='monitor',
+            linked_trend_ids='[]',
+            linked_scenario_ids='[]',
+            linked_assumption_ids='[]',
+            expected_benefits='[]',
+            key_risks='[]',
+            required_capabilities='[]',
+            estimated_effort='low',
+            time_to_value='12_months',
+            impact_score=0.5,
+            feasibility_score=0.5,
+            urgency_score=0.5,
+            confidence_score=0.5,
+            priority_score=0.5,
+            recommended_next_step='Review later',
+            status='proposed',
+        )
+        StrategicOption.objects.create(
+            id='option-search',
+            workspace=search,
+            title='Search option',
+            option_type='experiment',
+            linked_trend_ids='[]',
+            linked_scenario_ids='[]',
+            linked_assumption_ids='[]',
+            expected_benefits='[]',
+            key_risks='[]',
+            required_capabilities='[]',
+            estimated_effort='medium',
+            time_to_value='6_months',
+            impact_score=0.8,
+            feasibility_score=0.7,
+            urgency_score=0.8,
+            confidence_score=0.8,
+            priority_score=0.78,
+            recommended_next_step='Run pilot',
+            status='proposed',
+        )
+
+        response = self.client.get('/api/strategic-options', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['title'] for item in response.json()], ['Search option'])
+
+    def test_roadmap_items_are_scoped_by_workspace_header(self):
+        company = Workspace.objects.create(id='ws-company', name='Company-wide Trends')
+        search = Workspace.objects.create(id='ws-search', name='Search')
+        company_option = StrategicOption.objects.create(
+            id='option-company',
+            workspace=company,
+            title='Company option',
+            option_type='monitor',
+            linked_trend_ids='[]',
+            linked_scenario_ids='[]',
+            linked_assumption_ids='[]',
+            expected_benefits='[]',
+            key_risks='[]',
+            required_capabilities='[]',
+            estimated_effort='low',
+            time_to_value='12_months',
+            impact_score=0.5,
+            feasibility_score=0.5,
+            urgency_score=0.5,
+            confidence_score=0.5,
+            priority_score=0.5,
+            recommended_next_step='Review later',
+            status='accepted',
+        )
+        search_option = StrategicOption.objects.create(
+            id='option-search',
+            workspace=search,
+            title='Search option',
+            option_type='experiment',
+            linked_trend_ids='[]',
+            linked_scenario_ids='[]',
+            linked_assumption_ids='[]',
+            expected_benefits='[]',
+            key_risks='[]',
+            required_capabilities='[]',
+            estimated_effort='medium',
+            time_to_value='6_months',
+            impact_score=0.8,
+            feasibility_score=0.7,
+            urgency_score=0.8,
+            confidence_score=0.8,
+            priority_score=0.78,
+            recommended_next_step='Run pilot',
+            status='accepted',
+        )
+        RoadmapItem.objects.create(
+            id='roadmap-company',
+            workspace=company,
+            strategic_option=company_option,
+            title='Company roadmap item',
+            horizon='later',
+            owner='',
+            status='proposed',
+            success_metric='Company KPI',
+            linked_indicator_ids='[]',
+        )
+        RoadmapItem.objects.create(
+            id='roadmap-search',
+            workspace=search,
+            strategic_option=search_option,
+            title='Search roadmap item',
+            horizon='now',
+            owner='',
+            status='proposed',
+            success_metric='Search KPI',
+            linked_indicator_ids='[]',
+        )
+
+        response = self.client.get('/api/roadmap-items', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['title'] for item in response.json()], ['Search roadmap item'])
+
+    def test_roadmap_item_execution_fields_are_updateable(self):
+        workspace = Workspace.objects.create(id='ws-search', name='Search')
+        option = StrategicOption.objects.create(
+            id='option-search',
+            workspace=workspace,
+            title='Search option',
+            option_type='experiment',
+            linked_trend_ids='[]',
+            linked_scenario_ids='[]',
+            linked_assumption_ids='[]',
+            expected_benefits='[]',
+            key_risks='[]',
+            required_capabilities='[]',
+            estimated_effort='medium',
+            time_to_value='6_months',
+            impact_score=0.8,
+            feasibility_score=0.7,
+            urgency_score=0.8,
+            confidence_score=0.8,
+            priority_score=0.78,
+            recommended_next_step='Run pilot',
+            status='accepted',
+        )
+        RoadmapItem.objects.create(
+            id='roadmap-search',
+            workspace=workspace,
+            strategic_option=option,
+            title='Search roadmap item',
+            horizon='now',
+            owner='',
+            status='proposed',
+            success_metric='Search KPI',
+            linked_indicator_ids='[]',
+        )
+
+        response = self.client.patch('/api/roadmap-items/roadmap-search', {
+            'owner': 'Search Product Lead',
+            'target_date': '2026-09-30',
+            'progress_percent': 35,
+            'progress_note': 'Pilot scope agreed with merchandising.',
+            'last_reviewed_at': '2026-07-14T10:00:00Z',
+        }, format='json', HTTP_X_TRENDMAP_WORKSPACE='ws-search')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = RoadmapItem.objects.get(id='roadmap-search')
+        self.assertEqual(item.owner, 'Search Product Lead')
+        self.assertEqual(str(item.target_date), '2026-09-30')
+        self.assertEqual(item.progress_percent, 35)
+        self.assertEqual(item.progress_note, 'Pilot scope agreed with merchandising.')
+
+    def test_create_source_accepts_long_url(self):
+        long_url = 'https://example.com/source?' + '&'.join([f'utm_param_{index}=value{index}' for index in range(40)])
+
+        response = self.client.post('/api/sources', {
+            'name': 'Long URL source',
+            'url': long_url,
+            'status': 'approved',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Source.objects.get(name='Long URL source').url, long_url)
+
     def test_create_document(self):
         source = Source.objects.create(name='Wired', url='https://wired.com')
         url = '/api/documents'
@@ -78,6 +695,22 @@ class CoreEntitiesTests(APITestCase):
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Document.objects.count(), 1)
+
+    def test_create_manual_document_accepts_long_reference_url(self):
+        source = Source.objects.create(name='Long Link Source', url='https://example.com', status='approved')
+        long_url = 'https://example.com/reports/online-grocery.pdf?' + '&'.join([f'_gl_{index}=abcdefghijklmnopqrstuvwxyz' for index in range(35)])
+
+        response = self.client.post('/api/documents', {
+            'source_id': source.id,
+            'title': 'Long URL evidence',
+            'url': long_url,
+            'content': 'Long URL evidence about online grocery, supermarket shopping, pricing, and delivery expectations.',
+            'ingestion_status': 'raw',
+            'published_date': timezone.now().isoformat(),
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Document.objects.get(title='Long URL evidence').url, long_url)
 
     def test_create_manual_document_with_source_id(self):
         source = Source.objects.create(name='Manual Source', url='https://example.com/manual', status='approved')
@@ -165,6 +798,133 @@ class CoreEntitiesTests(APITestCase):
         self.assertIn('NielsenIQ report evidence says grocery shoppers', document.content)
         self.assertNotIn('Manual reference URL added for review', document.content)
 
+    @patch('trendmap_api.views.fetch_source_excerpt')
+    def test_refresh_document_content_replaces_thin_reference_stub(self, mock_fetch):
+        source = Source.objects.create(name='BCG', url='https://www.bcg.com', status='approved')
+        document = Document.objects.create(
+            id='doc-refresh',
+            source=source,
+            title='bcg.com',
+            url='https://www.bcg.com/publications/2026/how-cpg-retail-leaders-maximize-ai-roi?utm_campaign=ai&utm_source=esp',
+            content='Manual reference URL added for review: https://www.bcg.com/publications/2026/how-cpg-retail-leaders-maximize-ai-roi',
+            status='processed',
+        )
+        mock_fetch.return_value = (
+            'How CPG retail leaders maximize AI ROI',
+            'CPG and retail leaders are using artificial intelligence to improve ROI, pricing, merchandising, promotions, consumer engagement, category management, and digital commerce. The strongest retail use cases connect AI investments to measurable margin, revenue, shopper experience, and operating model gains.',
+            'text/html',
+        )
+
+        response = self.client.post(f'/api/documents/{document.id}/refresh-content', format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        document.refresh_from_db()
+        self.assertIn('CPG and retail leaders are using artificial intelligence', document.content)
+        self.assertNotIn('Manual reference URL added for review', document.content)
+        self.assertEqual(document.status, 'raw')
+
+    @patch('trendmap_api.views.fetch_source_excerpt')
+    def test_refresh_document_content_reports_blocked_capture_without_500(self, mock_fetch):
+        source = Source.objects.create(name='BCG', url='https://www.bcg.com', status='approved')
+        document = Document.objects.create(
+            id='doc-refresh-blocked',
+            source=source,
+            title='bcg.com',
+            url='https://www.bcg.com/publications/2026/how-cpg-retail-leaders-maximize-ai-roi',
+            content='Manual reference URL added for review: https://www.bcg.com/publications/2026/how-cpg-retail-leaders-maximize-ai-roi',
+            status='processed',
+        )
+        mock_fetch.side_effect = HTTPError(document.url, 403, 'Forbidden', hdrs=None, fp=None)
+
+        response = self.client.post(f'/api/documents/{document.id}/refresh-content', format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('blocked automated capture', response.json()['detail'])
+        self.assertIn('paste the article text', response.json()['detail'])
+
+    @patch('trendmap_api.views.urlopen')
+    def test_fetch_url_bytes_retries_without_tracking_query(self, mock_urlopen):
+        class FakeResponse:
+            headers = {'Content-Type': 'text/html'}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self, _limit):
+                return b'<html><title>BCG article</title><body>Retail AI evidence.</body></html>'
+
+        views.FETCH_BYTES_CACHE.clear()
+        tracked_url = 'https://www.bcg.com/publications/2026/how-cpg-retail-leaders-maximize-ai-roi?utm_campaign=ai&utm_source=esp'
+        mock_urlopen.side_effect = [
+            HTTPError(tracked_url, 403, 'Forbidden', hdrs=None, fp=None),
+            FakeResponse(),
+        ]
+
+        raw, content_type = views.fetch_url_bytes(tracked_url)
+
+        self.assertIn(b'BCG article', raw)
+        self.assertEqual(content_type, 'text/html')
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_urlopen.call_args_list[1].args[0].full_url, 'https://www.bcg.com/publications/2026/how-cpg-retail-leaders-maximize-ai-roi')
+
+    def test_replace_document_content_resets_extraction_and_clears_stale_traceability(self):
+        source = Source.objects.create(name='Manual Source', url='https://example.com/manual', status='approved')
+        document = Document.objects.create(
+            id='doc-replace-content',
+            source=source,
+            title='Blocked article',
+            content='Capture incomplete',
+            status='extracted',
+        )
+        signal = Signal.objects.create(id='sig-stale-content', document=document, source=source, title='Stale Signal')
+        trend = Trend.objects.create(id='trend-stale-content', name='Stale Trend', status='candidate')
+        EvidenceLink.objects.create(
+            id='ev-stale-content',
+            trend=trend,
+            signal=signal,
+            document=document,
+            source=source,
+            relationship_type='supports',
+        )
+        pasted_content = (
+            'CPG and retail leaders are using artificial intelligence to improve ROI across pricing, merchandising, '
+            'promotions, consumer engagement, category management, and digital commerce. The strongest grocery and '
+            'supermarket use cases connect AI investment to measurable margin improvement, revenue growth, shopper '
+            'experience, loyalty, fulfilment efficiency, and operating model productivity over time.'
+        )
+
+        response = self.client.post(f'/api/documents/{document.id}/replace-content', {
+            'content': pasted_content,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        document.refresh_from_db()
+        self.assertIn('CPG and retail leaders are using artificial intelligence', document.content)
+        self.assertEqual(document.status, 'raw')
+        self.assertEqual(Signal.objects.filter(id='sig-stale-content').count(), 0)
+        self.assertEqual(EvidenceLink.objects.filter(id='ev-stale-content').count(), 0)
+        self.assertEqual(response.json()['extracted_signal_ids'], [])
+
+    def test_replace_document_content_requires_reviewable_text(self):
+        source = Source.objects.create(name='Manual Source', url='https://example.com/manual', status='approved')
+        document = Document.objects.create(
+            id='doc-replace-thin-content',
+            source=source,
+            title='Blocked article',
+            content='Capture incomplete',
+            status='processed',
+        )
+
+        response = self.client.post(f'/api/documents/{document.id}/replace-content', {
+            'content': 'Too short.',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('40 words', response.json()['detail'])
+
     def test_create_signal(self):
         source = Source.objects.create(name='Verge', url='https://theverge.com')
         document = Document.objects.create(source=source, title='Doc', content='test')
@@ -230,6 +990,45 @@ class CoreEntitiesTests(APITestCase):
         self.assertEqual(Trend.objects.count(), 0)
         self.assertEqual(EvidenceLink.objects.count(), 0)
         self.assertEqual(ExtractionRun.objects.count(), 0)
+
+    def test_clear_analysis_data_with_workspace_header_preserves_other_workspace_data(self):
+        search = Workspace.objects.create(id='ws-search', name='Search')
+        marketing = Workspace.objects.create(id='ws-marketing', name='Digital Marketing')
+        WorkspaceMembership.objects.create(id='mem-search-owner', workspace=search, user_id='user-owner', role='owner')
+        WorkspaceMembership.objects.create(id='mem-marketing-owner', workspace=marketing, user_id='other-owner', role='owner')
+        search_industry = Industry.objects.create(id='ind-search-clear', workspace=search, name='Search industry', geography='NZ')
+        marketing_industry = Industry.objects.create(id='ind-marketing-clear', workspace=marketing, name='Marketing industry', geography='NZ')
+        search_source = Source.objects.create(id='src-search-clear', workspace=search, name='Search Source', url='https://example.com/search', status='approved')
+        marketing_source = Source.objects.create(id='src-marketing-clear', workspace=marketing, name='Marketing Source', url='https://example.com/marketing', status='approved')
+        search_run = ExtractionRun.objects.create(id='run-search-clear', industry=search_industry, stage='document_extraction', status='completed')
+        marketing_run = ExtractionRun.objects.create(id='run-marketing-clear', industry=marketing_industry, stage='document_extraction', status='completed')
+        search_doc = Document.objects.create(id='doc-search-clear', workspace=search, source=search_source, extraction_run=search_run, title='Search Doc', content='Search content', status='raw')
+        marketing_doc = Document.objects.create(id='doc-marketing-clear', workspace=marketing, source=marketing_source, extraction_run=marketing_run, title='Marketing Doc', content='Marketing content', status='raw')
+        search_signal = Signal.objects.create(id='sig-search-clear', workspace=search, document=search_doc, source=search_source, extraction_run=search_run, title='Search signal')
+        marketing_signal = Signal.objects.create(id='sig-marketing-clear', workspace=marketing, document=marketing_doc, source=marketing_source, extraction_run=marketing_run, title='Marketing signal')
+        search_trend = Trend.objects.create(id='trend-search-clear', workspace=search, extraction_run=search_run, name='Search trend', status='candidate')
+        marketing_trend = Trend.objects.create(id='trend-marketing-clear', workspace=marketing, extraction_run=marketing_run, name='Marketing trend', status='candidate')
+        EvidenceLink.objects.create(id='ev-search-clear', trend=search_trend, signal=search_signal, document=search_doc, source=search_source, extraction_run=search_run, relationship_type='supports')
+        EvidenceLink.objects.create(id='ev-marketing-clear', trend=marketing_trend, signal=marketing_signal, document=marketing_doc, source=marketing_source, extraction_run=marketing_run, relationship_type='supports')
+
+        response = self.client.post(
+            '/api/admin/clear-analysis-data',
+            format='json',
+            HTTP_X_TRENDMAP_USER='user-owner',
+            HTTP_X_TRENDMAP_WORKSPACE='ws-search',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Document.objects.filter(id='doc-search-clear').count(), 0)
+        self.assertEqual(Signal.objects.filter(id='sig-search-clear').count(), 0)
+        self.assertEqual(Trend.objects.filter(id='trend-search-clear').count(), 0)
+        self.assertEqual(EvidenceLink.objects.filter(id='ev-search-clear').count(), 0)
+        self.assertEqual(ExtractionRun.objects.filter(id='run-search-clear').count(), 0)
+        self.assertEqual(Document.objects.filter(id='doc-marketing-clear').count(), 1)
+        self.assertEqual(Signal.objects.filter(id='sig-marketing-clear').count(), 1)
+        self.assertEqual(Trend.objects.filter(id='trend-marketing-clear').count(), 1)
+        self.assertEqual(EvidenceLink.objects.filter(id='ev-marketing-clear').count(), 1)
+        self.assertEqual(ExtractionRun.objects.filter(id='run-marketing-clear').count(), 1)
 
     def test_data_health_endpoint_exists_and_reports_issues(self):
         trend = Trend.objects.create(id='trend-health', name='Approved without evidence', status='approved')

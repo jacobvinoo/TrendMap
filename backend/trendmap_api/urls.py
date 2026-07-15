@@ -4,7 +4,7 @@ from .views import (
     health, version, csrf_token, extraction_logs, extraction_log_stream,
     clear_analysis_data, data_health, scan_news, insights_summary,
     upload_document, agent_extract, agent_discovery, agent_analyze, cluster_trend,
-    IndustryViewSet, SourceViewSet, DocumentViewSet,
+    WorkspaceViewSet, FindingViewSet, IndustryViewSet, SourceViewSet, DocumentViewSet,
     SignalViewSet, TrendViewSet, TrendThemeViewSet, NewsScanRunViewSet,
     NewsSnippetViewSet, AgentActivityViewSet, AgentDebateViewSet, AlertViewSet,
     AssumptionViewSet, AuditEventViewSet, ChangeEventViewSet, DataExportViewSet,
@@ -17,6 +17,8 @@ from .views import (
 )
 
 router = DefaultRouter(trailing_slash=False)
+router.register(r'workspaces', WorkspaceViewSet)
+router.register(r'findings', FindingViewSet)
 router.register(r'industries', IndustryViewSet)
 router.register(r'sources', SourceViewSet)
 router.register(r'news/scans', NewsScanRunViewSet)

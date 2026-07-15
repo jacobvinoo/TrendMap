@@ -9,6 +9,31 @@ import uuid
 from django.db import models
 
 
+class Workspace(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    purpose = models.TextField(blank=True, null=True)
+    owner_user_id = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'workspaces'
+
+
+class WorkspaceMembership(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, related_name='memberships')
+    user_id = models.CharField(max_length=255)
+    role = models.CharField(max_length=64)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'workspace_memberships'
+        unique_together = (('workspace', 'user_id'),)
+
+
 class AgentActivity(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
     agent_role = models.CharField(max_length=255)
@@ -144,16 +169,20 @@ class DecisionBrief(models.Model):
 
 class Document(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     source = models.ForeignKey('Source', models.DO_NOTHING)
     extraction_run = models.ForeignKey('ExtractionRun', models.DO_NOTHING, blank=True, null=True)
     title = models.CharField(max_length=255)
-    url = models.CharField(max_length=255, blank=True, null=True)
+    url = models.TextField(blank=True, null=True)
     content = models.TextField()
     status = models.CharField(max_length=255, blank=True, null=True)
     published_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(blank=True, null=True)
     class Meta:
         db_table = 'documents'
+        indexes = [
+            models.Index(fields=['extraction_run'], name='documents_run_idx'),
+        ]
 
 
 class ExtractionRun(models.Model):
@@ -196,6 +225,9 @@ class EvidenceLink(models.Model):
     created_at = models.DateTimeField(blank=True, null=True)
     class Meta:
         db_table = 'evidence_links'
+        indexes = [
+            models.Index(fields=['extraction_run'], name='evidence_run_idx'),
+        ]
 
 
 class HealthCheck(models.Model):
@@ -211,6 +243,7 @@ class HealthCheck(models.Model):
 
 class Industry(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     name = models.CharField(max_length=255)
     geography = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
@@ -339,6 +372,7 @@ class Prediction(models.Model):
 
 class RoadmapItem(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     strategic_option = models.ForeignKey('StrategicOption', models.DO_NOTHING)
     title = models.CharField(max_length=255)
     horizon = models.CharField(max_length=255, blank=True, null=True)
@@ -346,6 +380,10 @@ class RoadmapItem(models.Model):
     status = models.CharField(max_length=255, blank=True, null=True)
     success_metric = models.CharField(max_length=255, blank=True, null=True)
     linked_indicator_ids = models.TextField(blank=True, null=True)
+    target_date = models.DateField(blank=True, null=True)
+    progress_percent = models.FloatField(blank=True, null=True)
+    progress_note = models.TextField(blank=True, null=True)
+    last_reviewed_at = models.DateTimeField(blank=True, null=True)
     class Meta:
         db_table = 'roadmap_items'
 
@@ -369,6 +407,7 @@ class Scenario(models.Model):
 
 class Signal(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     document = models.ForeignKey(Document, models.DO_NOTHING)
     source = models.ForeignKey('Source', models.DO_NOTHING)
     extraction_run = models.ForeignKey(ExtractionRun, models.DO_NOTHING, blank=True, null=True)
@@ -383,6 +422,9 @@ class Signal(models.Model):
     created_at = models.DateTimeField(blank=True, null=True)
     class Meta:
         db_table = 'signals'
+        indexes = [
+            models.Index(fields=['extraction_run'], name='signals_run_idx'),
+        ]
 
 
 class SourceSnapshot(models.Model):
@@ -397,8 +439,9 @@ class SourceSnapshot(models.Model):
 
 class Source(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     name = models.CharField(max_length=255)
-    url = models.CharField(max_length=255)
+    url = models.TextField()
     source_type = models.CharField(max_length=255, blank=True, null=True)
     credibility_score = models.FloatField(blank=True, null=True)
     relevance_score = models.FloatField(blank=True, null=True)
@@ -411,8 +454,36 @@ class Source(models.Model):
         db_table = 'sources'
 
 
+class Finding(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
+    finding_type = models.CharField(max_length=255)
+    title = models.CharField(max_length=255)
+    summary = models.TextField(blank=True, null=True)
+    why_it_matters = models.TextField(blank=True, null=True)
+    evidence_snippet = models.TextField(blank=True, null=True)
+    recommended_action = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=255, blank=True, null=True)
+    confidence_score = models.FloatField(blank=True, null=True)
+    impact_score = models.FloatField(blank=True, null=True)
+    source = models.ForeignKey(Source, models.DO_NOTHING, blank=True, null=True)
+    document = models.ForeignKey(Document, models.DO_NOTHING, blank=True, null=True)
+    signal = models.ForeignKey(Signal, models.DO_NOTHING, blank=True, null=True)
+    trend = models.ForeignKey('Trend', models.DO_NOTHING, blank=True, null=True)
+    discovered_at = models.DateTimeField(blank=True, null=True)
+    evidence_date = models.DateTimeField(blank=True, null=True)
+    retrieved_at = models.DateTimeField(blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    review_note = models.TextField(blank=True, null=True)
+    metadata_json = models.JSONField(blank=True, null=True, default=dict)
+
+    class Meta:
+        db_table = 'findings'
+
+
 class NewsScanRun(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     industry = models.ForeignKey('Industry', models.DO_NOTHING, blank=True, null=True)
     status = models.CharField(max_length=255, blank=True, null=True)
     query = models.TextField(blank=True, null=True)
@@ -430,6 +501,7 @@ class NewsScanRun(models.Model):
 
 class NewsSnippet(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     run = models.ForeignKey(NewsScanRun, models.DO_NOTHING, blank=True, null=True)
     source = models.ForeignKey(Source, models.DO_NOTHING, blank=True, null=True)
     title = models.CharField(max_length=255)
@@ -444,6 +516,10 @@ class NewsSnippet(models.Model):
 
     class Meta:
         db_table = 'news_snippets'
+        indexes = [
+            models.Index(fields=['run'], name='news_snippet_run_idx'),
+            models.Index(fields=['source'], name='news_snippet_source_idx'),
+        ]
 
 
 class StrategicContext(models.Model):
@@ -479,6 +555,7 @@ class StrategicImplication(models.Model):
 
 class StrategicOption(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     option_type = models.CharField(max_length=255, blank=True, null=True)
@@ -543,6 +620,7 @@ class TrendScoreSnapshot(models.Model):
 
 class Trend(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     extraction_run = models.ForeignKey(ExtractionRun, models.DO_NOTHING, blank=True, null=True)
     name = models.CharField(max_length=255)
     summary = models.TextField(blank=True, null=True)
@@ -563,14 +641,19 @@ class Trend(models.Model):
     recommended_actions = models.JSONField(blank=True, null=True, default=list)
     class Meta:
         db_table = 'trends'
+        indexes = [
+            models.Index(fields=['extraction_run'], name='trends_run_idx'),
+        ]
 
 
 class TrendTheme(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, models.DO_NOTHING, blank=True, null=True)
     industry = models.ForeignKey(Industry, models.DO_NOTHING, blank=True, null=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     keywords = models.JSONField(blank=True, null=True, default=list)
+    aliases = models.JSONField(blank=True, null=True, default=list)
     status = models.CharField(max_length=255, blank=True, null=True)
     origin = models.CharField(max_length=255, blank=True, null=True)
     evidence_summary = models.TextField(blank=True, null=True)

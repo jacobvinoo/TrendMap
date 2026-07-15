@@ -6,6 +6,7 @@ import { repository } from './repository';
 // Mock repository
 vi.mock('./repository', () => ({
   repository: {
+    getActiveWorkspace: vi.fn(),
     runDataHealthCheck: vi.fn(),
     clearAnalysisData: vi.fn(),
   },
@@ -14,6 +15,12 @@ vi.mock('./repository', () => ({
 describe('AdminDataHealthScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // @ts-ignore
+    repository.getActiveWorkspace.mockResolvedValue({
+      id: 'workspace-default',
+      name: 'Company-wide Trends',
+      currentUserRole: 'owner',
+    });
   });
 
   it('renders loading state initially and fetches health summary', async () => {
@@ -118,6 +125,7 @@ describe('AdminDataHealthScreen', () => {
 
     expect(repository.clearAnalysisData).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /confirm clear/i })).toBeInTheDocument();
+    expect(screen.getByText(/remove generated documents, signals, trends, evidence, and insights for the active workspace/i)).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /confirm clear/i }));
@@ -125,5 +133,31 @@ describe('AdminDataHealthScreen', () => {
 
     expect(repository.clearAnalysisData).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Removed 10 generated rows/i)).toBeInTheDocument();
+  });
+
+  it('disables generated data clearing for non-admin workspace roles', async () => {
+    const mockSummary = {
+      status: 'healthy',
+      checksRun: 1,
+      issueCount: 0,
+      latestChecks: [],
+      issues: []
+    };
+    // @ts-ignore
+    repository.getActiveWorkspace.mockResolvedValue({
+      id: 'ws-search',
+      name: 'Search',
+      currentUserRole: 'analyst',
+    });
+    // @ts-ignore
+    repository.runDataHealthCheck.mockResolvedValue(mockSummary);
+
+    await act(async () => {
+      render(<AdminDataHealthScreen />);
+    });
+
+    expect(screen.getByRole('button', { name: /clear generated data/i })).toBeDisabled();
+    expect(screen.getByText(/Only workspace owners or admins can clear generated data/i)).toBeInTheDocument();
+    expect(repository.clearAnalysisData).not.toHaveBeenCalled();
   });
 });
